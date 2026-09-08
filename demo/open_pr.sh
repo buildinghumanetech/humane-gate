@@ -20,10 +20,13 @@ case "$n" in
   *) echo "pick 1, 2 or 3"; exit 1 ;;
 esac
 
+# Re-runnable: rebuild the branch from current main so a re-opened PR gets a
+# fresh head sha and therefore a clean check-run history.
 git checkout main -q
+git branch -D "$branch" -q 2>/dev/null || true
 git checkout -b "$branch" -q
 cp "$src" "$dst"
 git commit -qam "$title"
-git push -qu origin "$branch"
+git push -qfu origin "$branch"
 gh pr create --base main --head "$branch" --title "$title" --body "$body"
 git checkout main -q
