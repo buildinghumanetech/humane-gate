@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
+    inputs:
+      pr:
+        description: "Pull request number to re-judge"
+        required: true
 
 permissions:
   contents: read
@@ -26,14 +30,17 @@ jobs:
       # The PR is fetched as loose objects and never checked out, never built,
       # never executed. Only its diff text is read.
       - name: Fetch PR head read-only
-        if: github.event_name == 'pull_request'
         run: |
-          git fetch --no-tags --quiet origin \
-            "+refs/pull/${{ github.event.pull_request.number }}/head:refs/humane/pr-head"
+          pr="${{ github.event.pull_request.number || inputs.pr }}"
+          git fetch --no-tags --quiet origin "+refs/pull/$pr/head:refs/humane/pr-head"
           head=$(git rev-parse refs/humane/pr-head)
           base=$(git merge-base "origin/${{ github.event.repository.default_branch }}" "$head")
-          echo "HEAD_SHA=$head" >> "$GITHUB_ENV"
-          echo "BASE_SHA=$base" >> "$GITHUB_ENV"
+          {
+            echo "PR_NUMBER=$pr"
+            echo "HEAD_SHA=$head"
+            echo "BASE_SHA=$base"
+          } >> "$GITHUB_ENV"
+          echo "judging PR #$pr, ${base:0:7}..${head:0:7}"
 
       - uses: actions/setup-python@v5
         with:
@@ -42,12 +49,10 @@ jobs:
       - run: pip install --quiet -r requirements.txt
 
       - name: HumaneBench (shadow mode)
-        if: github.event_name == 'pull_request'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
           HUMANEBENCH_MODEL: claude-sonnet-4-6
         run: python humanebench/judge.py
