@@ -89,7 +89,12 @@ def build_system() -> str:
 def judge(diff: str) -> dict:
     system = build_system()
 
-    client = anthropic.Anthropic()
+    # An org-scoped key must name a workspace explicitly. A workspace-scoped key
+    # does not. Setting ANTHROPIC_WORKSPACE_ID makes either kind work.
+    ws = os.environ.get("ANTHROPIC_WORKSPACE_ID", "").strip()
+    client = anthropic.Anthropic(
+        default_headers={"anthropic-workspace-id": ws} if ws else None
+    )
     resp = client.messages.create(
         model=MODEL,
         max_tokens=2000,
