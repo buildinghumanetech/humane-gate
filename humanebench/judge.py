@@ -111,14 +111,15 @@ SCHEMA = {
         "summary": {"type": "string"},
         "findings": {
             "type": "array",
-            "maxItems": 3,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
                 "required": FINDING_FIELDS,
                 "properties": {
                     "principle": {"type": "string", "enum": PRINCIPLES},
-                    "score": {"type": "number", "enum": [-1.0, -0.5]},
+                    # String enum, not numeric: keeps the schema to keywords
+                    # the API accepts. Rendered as-is.
+                    "score": {"type": "string", "enum": ["-1.0", "-0.5"]},
                     "tier": {"type": "string"},
                     "confidence": {"type": "string",
                                    "enum": ["high", "medium", "low"]},
