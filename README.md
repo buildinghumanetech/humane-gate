@@ -82,6 +82,19 @@ python humanebench/judge.py
 | `app/` | A small companion app to have PRs against. |
 | `demo/` | The three demo PRs. |
 
+## Threat model
+
+The gate runs from the default branch. The pull request is fetched as loose git
+objects, never checked out, never built, never executed; only its diff text is
+read. So a PR cannot edit `humanebench/prompt.md`, `rubrics/rubric_v3.md` or
+`judge.py` and then be scored by its own edits.
+
+**Not yet closed:** for same-repository pull requests, GitHub runs the workflow
+file from the PR itself, so a PR can still edit `.github/workflows/humanebench.yml`.
+Closing that needs GitHub-side controls, a branch ruleset with a required
+workflow, not anything this repo can do to itself. Any real deployment should
+turn those on. Credit to the Sparkle implementation for the two-checkout design.
+
 ## Notes
 
 - Single judge, and **verdicts are not reproducible**: the current Messages API
