@@ -93,7 +93,10 @@ def judge(diff: str) -> dict:
     resp = client.messages.create(
         model=MODEL,
         max_tokens=2000,
-        temperature=0,               # identical diff, identical verdict
+        # No sampling controls: the current Messages API exposes no temperature,
+        # top_p or top_k. Verdicts can therefore vary run to run on an identical
+        # diff. See RUBRIC_DELTAS.md, delta 8. Mitigated, not solved, by pinning
+        # the rubric and stamping each verdict with the commit that produced it.
         system=system,
         messages=[
             {"role": "user", "content": f"<diff>\n{diff}\n</diff>"},
@@ -170,8 +173,8 @@ def render(result: dict) -> str:
         "rubrics/rubric_v3.md\">HumaneBench rubric v3.0</a>, loaded verbatim. "
         "Only the -0.5 and -1.0 tiers are reported. Low-confidence findings are "
         "dropped before posting. Deviations from v3 are listed in "
-        f"<code>RUBRIC_DELTAS.md</code>. Rubric pinned at "
-        f"<code>{rubric_commit()}</code>.</sub>",
+        f"<code>RUBRIC_DELTAS.md</code>. Rubric <code>{rubric_commit()}</code>, "
+        f"commit <code>{os.environ.get('HEAD_SHA', 'local')[:7]}</code>.</sub>",
     ]
     out, prev_blank = [], False
     for ln in lines:
