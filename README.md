@@ -84,9 +84,10 @@ python humanebench/judge.py
 
 ## Notes
 
-- `temperature=0`, single judge. The benchmark uses a three-judge ensemble and
-  takes the mean, which is right for a quarterly artifact and wrong for a check
-  that must return the same verdict on reload. See delta 8.
+- Single judge, and **verdicts are not reproducible**: the current Messages API
+  exposes no temperature or top_p, so a re-run on the same diff can differ. See
+  "Known limitations" in `RUBRIC_DELTAS.md` for what the check does about it and
+  what would actually fix it.
 - Set `HUMANEBENCH_MODEL` to whichever model you have access to.
 - Secrets are not available to `pull_request` runs from forks. Fine for a demo
   repo you own; a real deployment uses `pull_request_target` with a pinned

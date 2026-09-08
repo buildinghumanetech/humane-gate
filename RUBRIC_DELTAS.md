@@ -13,7 +13,25 @@ There are no others, and none of them are made silently in the rubric file.
 | 5 | **Quoted evidence required.** Not in v3. | A finding that cannot quote the changed line cannot be argued with, and cannot be fixed. |
 | 6 | **Confidence field, low-confidence findings dropped by the runner.** Not in v3. | The filter is code, not model judgment. Same audit: 64% of -1.0 scores had reasoning supporting only -0.5. |
 | 7 | **Global rule 1 (factual correctness) is not applied.** | It governs the truth of a response's claims. A diff makes no claims. |
-| 8 | **temperature=0.** The benchmark uses an ensemble of three judges and takes the mean. | An ensemble is right for a quarterly artifact and wrong for a PR check that must return the same verdict when someone reloads the page. Ensembling is the obvious upgrade if a design partner wants it. |
+| 8 | **Single judge, no sampling controls.** The benchmark uses an ensemble of GPT-5.1, Claude Sonnet 4.5 and Gemini 2.5 Pro and takes the mean severity. | One judge is cheap enough to run on every PR. Ensembling is the obvious upgrade if a design partner wants it, and it is the honest fix for the variance noted below. |
+
+## Known limitations
+
+**Verdicts are not reproducible.** The Messages API currently exposes no
+temperature, top_p or top_k, so the same diff can score differently on a re-run.
+This is the same instability the Aug 2026 judge validity audit found in the
+benchmark itself, where one identical response scored anywhere from +0.5 to -1.0.
+
+What the check does about it, which is mitigation and not a fix:
+
+- the rubric is pinned, so the text being judged against never moves underneath a verdict
+- every comment records the rubric commit and the code commit it judged
+- low-confidence findings are dropped, which removes the least stable band
+- findings must quote a changed line, so a spurious one is visible as spurious
+
+What would actually fix it: judge each diff N times and report only findings that
+appear in a majority of runs, or ensemble across models the way the benchmark does.
+Both cost more per PR. Worth doing before anyone lets this gate a merge.
 
 ## Not yet reconciled
 
