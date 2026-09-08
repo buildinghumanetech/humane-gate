@@ -86,6 +86,54 @@ def build_system() -> str:
     return rubric + "\n\n---\n\n" + adaptation
 
 
+PRINCIPLES = [
+    "Respect User Attention",
+    "Enable Meaningful Choices",
+    "Enhance Human Capabilities",
+    "Protect Dignity & Safety",
+    "Foster Healthy Relationships",
+    "Prioritize Long-Term Wellbeing",
+    "Be Transparent and Honest",
+    "Design for Equity & Inclusion",
+]
+
+FINDING_FIELDS = [
+    "principle", "score", "tier", "confidence",
+    "file", "evidence", "behavior", "rationale", "suggestion",
+]
+
+SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["verdict", "summary", "findings"],
+    "properties": {
+        "verdict": {"type": "string", "enum": ["clean", "flags"]},
+        "summary": {"type": "string"},
+        "findings": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": FINDING_FIELDS,
+                "properties": {
+                    "principle": {"type": "string", "enum": PRINCIPLES},
+                    "score": {"type": "number", "enum": [-1.0, -0.5]},
+                    "tier": {"type": "string"},
+                    "confidence": {"type": "string",
+                                   "enum": ["high", "medium", "low"]},
+                    "file": {"type": "string"},
+                    "evidence": {"type": "string"},
+                    "behavior": {"type": "string"},
+                    "rationale": {"type": "string"},
+                    "suggestion": {"type": "string"},
+                },
+            },
+        },
+    },
+}
+
+
 def judge(diff: str) -> dict:
     system = build_system()
 
@@ -95,29 +143,32 @@ def judge(diff: str) -> dict:
     client = anthropic.Anthropic(
         default_headers={"anthropic-workspace-id": ws} if ws else None
     )
+
+    # Structured output, not an assistant prefill: the response is constrained
+    # to SCHEMA, so a finding cannot arrive without its evidence or confidence.
+    #
+    # No sampling controls: the current Messages API exposes no temperature,
+    # top_p or top_k. Verdicts can vary run to run on an identical diff. See
+    # RUBRIC_DELTAS.md, "Known limitations".
     resp = client.messages.create(
         model=MODEL,
         max_tokens=2000,
-        # No sampling controls: the current Messages API exposes no temperature,
-        # top_p or top_k. Verdicts can therefore vary run to run on an identical
-        # diff. See RUBRIC_DELTAS.md, delta 8. Mitigated, not solved, by pinning
-        # the rubric and stamping each verdict with the commit that produced it.
         system=system,
-        messages=[
-            {"role": "user", "content": f"<diff>\n{diff}\n</diff>"},
-            {"role": "assistant", "content": "{"},   # prefill: forces bare JSON
-        ],
+        messages=[{"role": "user", "content": f"<diff>\n{diff}\n</diff>"}],
+        output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
     )
-    raw = "{" + resp.content[0].text
-    raw = raw[: raw.rfind("}") + 1]
+
+    raw = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
     try:
         result = json.loads(raw)
     except json.JSONDecodeError:
-        return {"verdict": "clean", "summary": "Judge returned unparseable output.",
+        return {"verdict": "clean",
+                "summary": "Judge returned unparseable output.",
                 "findings": [], "error": raw[:500]}
 
     # Drop anything the judge itself is not confident about, and anything
-    # without quotable evidence. This is the whole anti-noise story.
+    # without quotable evidence. This is the whole anti-noise story, and it is
+    # code rather than model judgment.
     kept = [
         f for f in result.get("findings", [])
         if f.get("confidence") not in DROP_CONFIDENCE and f.get("evidence", "").strip()
