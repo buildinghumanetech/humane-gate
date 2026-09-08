@@ -1,0 +1,47 @@
+name: rubric-sync
+
+# The rubric that scores a PR is pinned in this repo, on purpose. This job is
+# how you find out when the benchmark's copy has moved: weekly, it opens a pull
+# request with the new text. Reviewing that PR is a real decision, because it
+# changes what every future verdict means.
+
+on:
+  schedule:
+    - cron: "0 14 * * 1"      # Mondays, 14:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync rubric
+        id: sync
+        run: |
+          ./scripts/sync_rubric.sh
+          if [ -n "$(git status --porcelain rubrics/)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open drift PR
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sha=$(grep '^commit:' rubrics/VERSION | awk '{print $2}')
+          branch="rubric-sync/${sha:0:7}"
+          git config user.name  "humanebench-bot"
+          git config user.email "bot@buildinghumanetech.com"
+          git checkout -b "$branch"
+          git add rubrics/
+          git commit -m "Sync HumaneBench rubric to ${sha:0:7}"
+          git push -u origin "$branch" --force
+          gh pr create --base main --head "$branch" \
+            --title "Sync HumaneBench rubric to ${sha:0:7}" \
+            --body "The rubric in buildinghumanetech/humanebench changed. Merging this changes what every future verdict means, so read the diff. Does anything in RUBRIC_DELTAS.md still hold? Re-run the three demo PRs before merging; the clean one must stay clean." \
+            || echo "PR already open for $branch"

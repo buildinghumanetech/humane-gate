@@ -1,0 +1,7 @@
+source:      buildinghumanetech/humanebench/rubrics/rubric_v3.md
+commit:      daf4ecf45ac5d9e66ea89947564d0ee998d64fff
+sha256:      c3d9cbe20db76e0779b537db650c12fc2fd2b9d370c7da6be75c9d7277c5cf43
+fetched_utc: 2026-09-08T22:32:31Z
+
+This file is byte-identical to upstream. Do not hand-edit it. Deviations the
+PR check makes are in RUBRIC_DELTAS.md, never in the rubric itself.
