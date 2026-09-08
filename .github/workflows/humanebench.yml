@@ -3,7 +3,7 @@ name: humanebench
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-  workflow_dispatch:          # lets you re-run it live on a call
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,24 +15,39 @@ jobs:
     name: shadow
     runs-on: ubuntu-latest
     steps:
+      # The gate runs from the default branch, never from the pull request.
+      # A PR cannot edit the rubric, the prompt or the judge and then be scored
+      # by its own edits.
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0      # needed for the merge-base diff
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      # The PR is fetched as loose objects and never checked out, never built,
+      # never executed. Only its diff text is read.
+      - name: Fetch PR head read-only
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --quiet origin \
+            "+refs/pull/${{ github.event.pull_request.number }}/head:refs/humane/pr-head"
+          head=$(git rev-parse refs/humane/pr-head)
+          base=$(git merge-base "origin/${{ github.event.repository.default_branch }}" "$head")
+          echo "HEAD_SHA=$head" >> "$GITHUB_ENV"
+          echo "BASE_SHA=$base" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - run: pip install --quiet anthropic requests
+      - run: pip install --quiet -r requirements.txt
 
       - name: HumaneBench (shadow mode)
+        if: github.event_name == 'pull_request'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
           HUMANEBENCH_MODEL: claude-sonnet-4-6
         run: python humanebench/judge.py
