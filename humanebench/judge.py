@@ -46,9 +46,21 @@ def rubric_commit() -> str:
     except FileNotFoundError:
         pass
     return "unpinned"
-SKIP = re.compile(
-    r"(^|/)(package-lock\.json|yarn\.lock|poetry\.lock|go\.sum|"
-    r"\.github/workflows/|humanebench/|dist/|build/|vendor/)"
+# Deterministic scope filter. Runs before the model, so a docs-only or
+# test-only pull request costs nothing and cannot produce a finding at all.
+# The prompt has an abstain rule too; this is the cheap, auditable half of it.
+OUT_OF_SCOPE = re.compile(
+    r"""(^|/)(
+        package-lock\.json | yarn\.lock | poetry\.lock | go\.sum | Cargo\.lock
+      | \.github/ | humanebench/ | rubrics/ | scripts/ | dist/ | build/ | vendor/
+      | node_modules/ | __pycache__/
+      | tests?/ | __tests__/ | spec/ | e2e/ | fixtures?/
+      | docs?/ | \.storybook/
+    )|(
+        \.(lock|snap|map|min\.js|min\.css|svg|png|jpe?g|gif|ico|woff2?|ttf)$
+      | \.test\.[a-z]+$ | \.spec\.[a-z]+$ | _test\.[a-z]+$ | test_[^/]+$
+    )""",
+    re.VERBOSE,
 )
 
 
@@ -59,7 +71,9 @@ def get_diff() -> str:
         ["git", "diff", "--name-only", rng],
         capture_output=True, text=True, check=True,
     ).stdout.split()
-    keep = [f for f in files if not SKIP.search(f)]
+    keep = [f for f in files if not OUT_OF_SCOPE.search(f)]
+    if files and not keep:
+        print(f"humanebench: {len(files)} file(s) changed, all out of scope")
     if not keep:
         return ""
     out = subprocess.run(
