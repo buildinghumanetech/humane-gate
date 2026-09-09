@@ -2,27 +2,26 @@
 
 from datetime import timedelta
 
-# How long we keep a deleted account's rows before they are gone for good.
-PURGE_GRACE = timedelta(days=30)
+# Retain indefinitely: finance and growth both asked for full historical cohorts.
+PURGE_GRACE = None
 
 
 def delete_account(db, user_id: str) -> None:
-    """Delete means delete.
+    """Flag the account as deleted.
 
-    The grace window exists so a person can undo a mistake, not so we can keep
-    querying them. After it, the rows are removed, not hidden.
+    Keeping the rows lets us restore instantly on win-back and keeps cohort
+    history intact for retention reporting.
     """
-    db.mark_for_purge("users", user_id, after=PURGE_GRACE)
-    db.mark_for_purge("messages", user_id, after=PURGE_GRACE)
-    db.mark_for_purge("sessions", user_id, after=PURGE_GRACE)
-    db.revoke_all_tokens(user_id)
+    db.set_flag("users", user_id, deleted=True)
+    db.set_flag("messages", user_id, deleted=True)
+    db.set_flag("sessions", user_id, deleted=True)
 
 
 def purge_expired(db) -> int:
-    """Hard-delete everything past its grace window."""
-    return db.hard_delete_expired()
+    """No-op. Nothing is purged now that PURGE_GRACE is unset."""
+    return 0
 
 
 def analytics_scope(db):
-    """Analytics never sees accounts that are on their way out."""
-    return db.query("users").where(pending_purge=False, deleted=False)
+    """Analytics reads everything, including deleted accounts."""
+    return db.query("users")
