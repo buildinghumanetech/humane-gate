@@ -117,13 +117,29 @@ FINDING_FIELDS = [
     "file", "evidence", "behavior", "rationale", "suggestion",
 ]
 
+COMMEND_FIELDS = ["principle", "file", "evidence", "note"]
+
 SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["verdict", "summary", "findings"],
+    "required": ["verdict", "summary", "findings", "commendations"],
     "properties": {
         "verdict": {"type": "string", "enum": ["clean", "flags"]},
         "summary": {"type": "string"},
+        "commendations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": COMMEND_FIELDS,
+                "properties": {
+                    "principle": {"type": "string", "enum": PRINCIPLES},
+                    "file": {"type": "string"},
+                    "evidence": {"type": "string"},
+                    "note": {"type": "string"},
+                },
+            },
+        },
         "findings": {
             "type": "array",
             "items": {
@@ -148,6 +164,34 @@ SCHEMA = {
         },
     },
 }
+
+
+def changed_lines(diff: str) -> list:
+    """Every line the diff added or removed, without the +/- marker.
+
+    Used to check a quoted piece of evidence actually exists. A judge that can
+    invent its evidence is a judge nobody can argue with.
+    """
+    out = []
+    for ln in diff.splitlines():
+        if ln.startswith(("+++", "---")) or len(ln) < 2:
+            continue
+        if ln[0] in "+-":
+            t = ln[1:].strip()
+            if t:
+                out.append(t)
+    return out
+
+
+def evidence_holds(quote: str, lines: list) -> bool:
+    q = " ".join(quote.split())
+    if not q:
+        return False
+    for ln in lines:
+        n = " ".join(ln.split())
+        if q in n or n in q:
+            return True
+    return False
 
 
 def judge(diff: str) -> dict:
@@ -182,15 +226,29 @@ def judge(diff: str) -> dict:
                 "summary": "Judge returned unparseable output.",
                 "findings": [], "error": raw[:500]}
 
-    # Drop anything the judge itself is not confident about, and anything
-    # without quotable evidence. This is the whole anti-noise story, and it is
-    # code rather than model judgment.
-    kept = [
-        f for f in result.get("findings", [])
-        if f.get("confidence") not in DROP_CONFIDENCE and f.get("evidence", "").strip()
-    ][:3]
-    result["findings"] = kept
-    result["verdict"] = "flags" if kept else "clean"
+    # Three filters, all in code rather than model judgment. This is the whole
+    # anti-noise story: the judge proposes, the runner disposes.
+    lines = changed_lines(diff)
+    kept, dropped = [], []
+    for f in result.get("findings", []):
+        if f.get("confidence") in DROP_CONFIDENCE:
+            dropped.append(("low confidence", f.get("principle")))
+            continue
+        if not evidence_holds(f.get("evidence", ""), lines):
+            dropped.append(("evidence not in diff", f.get("principle")))
+            continue
+        kept.append(f)
+    result["findings"] = kept[:3]
+
+    praise = [
+        c for c in result.get("commendations", [])
+        if evidence_holds(c.get("evidence", ""), lines)
+    ][:2]
+    result["commendations"] = praise
+
+    result["verdict"] = "flags" if result["findings"] else "clean"
+    for why, which in dropped:
+        print(f"humanebench: dropped {which!r} ({why})")
     return result
 
 
@@ -211,13 +269,13 @@ def render(result: dict) -> str:
     findings = result["findings"]
     lines = [
         MARKER,
-        "### HumaneBench check &middot; `shadow mode`",
+        "### HumaneBench check &middot; `advisory`",
         "",
     ]
     if not findings:
         lines += [
-            "**No findings.** Nothing in this diff changes a surface the eight "
-            "principles cover.",
+            "**No findings.** Nothing in this diff changes what a person can "
+            "experience.",
             "",
             f"_{result.get('summary', '')}_",
             "",
@@ -225,8 +283,8 @@ def render(result: dict) -> str:
     else:
         n = len(findings)
         lines += [
-            f"**{n} finding{'s' if n > 1 else ''}.** Shadow mode: this check does not "
-            "block, and it is not a required status.",
+            f"**{n} finding{'s' if n > 1 else ''}.** Advisory: this check does not "
+            "block and is not a required status.",
             "",
             f"_{result.get('summary', '')}_",
             "",
@@ -251,6 +309,21 @@ def render(result: dict) -> str:
                 f"**Smallest fix:** {f['suggestion']}",
                 "",
             ]
+    praise = result.get("commendations") or []
+    if praise:
+        lines += ["", "---", "", "#### Adds a protection", ""]
+        for c in praise:
+            lines += [
+                f"**{c['principle']}** &nbsp;`+1.0` &nbsp; `{c['file']}`",
+                "",
+                "```diff",
+                f"+ {c['evidence']}",
+                "```",
+                "",
+                c["note"],
+                "",
+            ]
+
     lines += [
         "---",
         "<sub>Scored against "
@@ -300,7 +373,7 @@ def upsert_comment(repo: str, pr: str, body: str):
 def post_check(repo: str, sha: str, result: dict):
     n = len(result["findings"])
     gh("POST", f"/repos/{repo}/check-runs", json={
-        "name": "humanebench / shadow",
+        "name": "humanebench / advisory",
         "head_sha": sha,
         "status": "completed",
         "conclusion": "neutral",          # never failure. shadow mode.
