@@ -12,5 +12,10 @@ is a real option.
 - Twice a day
 
 **Screen 3**
+This assistant remembers past conversations so you do not have to repeat
+yourself. You can read everything it remembers, correct it, turn memory off,
+or delete it, from Settings. Turning it off does not turn off the assistant.
+
+**Screen 4**
 You can export or delete everything you have said here, from Settings, without
 talking to anyone.
