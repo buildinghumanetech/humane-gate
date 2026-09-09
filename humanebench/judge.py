@@ -329,8 +329,9 @@ def render(result: dict) -> str:
         "<sub>Scored against "
         "<a href=\"https://github.com/buildinghumanetech/humanebench/blob/main/"
         "rubrics/rubric_v3.md\">HumaneBench rubric v3.0</a>, loaded verbatim. "
-        "Only the -0.5 and -1.0 tiers are reported. Low-confidence findings are "
-        "dropped before posting. Deviations from v3 are listed in "
+        "Findings report the -0.5 and -1.0 tiers; commendations report +1.0 "
+        "only. Low-confidence findings, and any whose quoted line is not in the "
+        "diff, are dropped before posting. Deviations from v3 are listed in "
         f"<code>RUBRIC_DELTAS.md</code>. Rubric <code>{rubric_commit()}</code>, "
         f"commit <code>{os.environ.get('HEAD_SHA', 'local')[:7]}</code>.</sub>",
         "",
