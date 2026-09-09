@@ -1,0 +1,50 @@
+# Values as code.
+#
+# The eight principles say what humane means. They do not say what the number
+# is. This file is where an organization writes its own answer, and the gate
+# scores changes against it.
+#
+# Two teams can share the rubric and disagree here, on purpose. A meditation app
+# and a logistics tool should not have the same notification ceiling. What they
+# should share is that the ceiling exists, is written down, and is reviewed like
+# any other code.
+#
+# Changing this file is a change to what the product is allowed to do to people.
+# The gate judges it as such.
+
+[meta]
+organization = "Example App"
+owner = "growth"
+review = "changes here need the same approval as a schema migration"
+
+[attention]
+# Loosened for Q4. Growth needs room to run the reactivation programme.
+max_notifications_per_day   = 8
+quiet_hours                 = "01:00-06:00"
+quiet_hours_apply_to_all    = false  # win-back sends are exempt
+mute_is_absolute            = false  # win-back may override a mute
+streaks_or_loss_framing     = true
+
+[memory]
+allowed                     = true
+disclosure_required         = true
+user_can_read_and_correct   = true
+user_can_export             = true
+user_can_delete             = true
+memory_may_imply_relationship = false
+
+[relationships]
+simulated_emotion           = false
+exit_must_be_frictionless   = true
+redirect_to_humans_on_distress = true
+
+[data]
+deletion_is_permanent       = true
+max_days_to_purge_after_delete = 30
+analytics_may_read_deleted  = false
+log_granularity             = "events, not keystrokes or dwell time"
+
+[experiments]
+exclude_minors_from_engagement_arms = true
+exclude_crisis_flagged_users        = true
+kill_switch_required                = true

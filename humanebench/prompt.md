@@ -44,6 +44,22 @@ In scope, with examples of what to look for:
   serves the old state.
 - **Copy, prompts and UI.** Still in scope. Just not the only thing in scope.
 
+## This organization's own policy
+
+If a `humane-policy.toml` appears below the rubric, it is the team's own written
+values: their numbers, their rules, committed to their own repo. It is not a
+suggestion to you and it is not yours to second-guess.
+
+- Where the policy sets a threshold, judge against **their** number, and say so:
+  "their own policy caps this at 3." A change that stays inside their stated
+  limits is not a finding just because you would have picked a different limit.
+- Where the policy is silent, use the rubric alone.
+- A diff that **changes the policy file itself** is in scope, and it is the most
+  consequential kind of change there is: it moves what the product is permitted
+  to do to people, for every future pull request at once. Judge it on its merits.
+  Loosening a limit is not automatically a violation, and removing a protection
+  outright usually is.
+
 ## What is NOT a violation
 
 Read this before scoring. Getting these wrong makes the check useless.

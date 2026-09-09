@@ -8,9 +8,10 @@
 #   6  queue-level consent         backend only          expect: clean + commends
 #   7  daily cap 2 to 3            one constant          expect: honestly ambiguous
 #   8  memory with disclosure      prompt + copy         expect: clean + commends
+#   9  policy loosened for Q4      humane-policy.toml    expect: flags. values as code.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-n="${1:?usage: ./demo/open_pr.sh <1|2|3|5|6|7|8>}"
+n="${1:?usage: ./demo/open_pr.sh <1|2|3|5|6|7|8|9>}"
 
 srcs=(); dsts=()
 case "$n" in
@@ -36,7 +37,10 @@ case "$n" in
                                       dsts=(app/system_prompt.md app/copy/onboarding.md)
      title="Ship cross-session memory with disclosure and user controls"
      body="The assistant now remembers past sessions. Onboarding says so, Settings lets people read, correct, export, turn off or delete what is stored, and the prompt attributes memories to the user rather than to the assistant." ;;
-  *) echo "pick 1, 2, 3, 5, 6, 7 or 8"; exit 1 ;;
+  9) branch=pr-9-policy-loosened;     srcs=(demo/pr9/humane-policy.toml); dsts=(humane-policy.toml)
+     title="Loosen notification policy for Q4 reactivation programme"
+     body="Growth needs room for the reactivation programme. Raises the daily cap to 8, narrows quiet hours to 1am-6am, exempts win-back sends from quiet hours, and lets win-back override a mute. No application code changes in this PR." ;;
+  *) echo "pick 1, 2, 3, 5, 6, 7, 8 or 9"; exit 1 ;;
 esac
 
 # Re-runnable: rebuild the branch from current main so a reopened PR gets a

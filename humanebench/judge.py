@@ -27,12 +27,15 @@ import requests
 MODEL = os.environ.get("HUMANEBENCH_MODEL", "claude-sonnet-4-5")
 MAX_DIFF_CHARS = 60_000
 MARKER = "<!-- humanebench-shadow -->"
+DOT = {"-1.0": "\U0001F534", "-0.5": "\U0001F7E1", "clean": "\U0001F535",
+       "+1.0": "\U0001F7E2"}
 DROP_CONFIDENCE = {"low"}
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 RUBRIC = os.path.join(ROOT, "rubrics", "rubric_v3.md")
 RUBRIC_VERSION = os.path.join(ROOT, "rubrics", "VERSION")
+POLICY = os.path.join(ROOT, "humane-policy.toml")
 
 
 def rubric_commit() -> str:
@@ -98,7 +101,26 @@ def build_system() -> str:
         rubric = f.read()
     with open(os.path.join(HERE, "prompt.md")) as f:
         adaptation = f.read()
-    return rubric + "\n\n---\n\n" + adaptation
+
+    parts = [rubric, adaptation]
+    # Values as code. The rubric says what humane means; the policy file is where
+    # this organization writes down its own numbers. Read as text, not parsed:
+    # the judge needs to understand it, not evaluate it.
+    if os.path.exists(POLICY):
+        with open(POLICY) as f:
+            parts.append(
+                "# This organization's declared values\n\n"
+                "The file below is `humane-policy.toml`, committed to this repo by\n"
+                "the team whose code you are judging. Where it sets a number or a\n"
+                "rule, judge the diff against that, and say so in your rationale:\n"
+                "\"their own policy says X\". Where it is silent, use the rubric alone.\n"
+                "Do not substitute your own preferred threshold for theirs.\n\n"
+                "A diff that changes this file is changing what the product is\n"
+                "permitted to do to people. Judge that change on its merits, the same\n"
+                "way you would judge the code it governs.\n\n"
+                "```toml\n" + f.read() + "\n```"
+            )
+    return "\n\n---\n\n".join(parts)
 
 
 PRINCIPLES = [
@@ -274,8 +296,8 @@ def render(result: dict) -> str:
     ]
     if not findings:
         lines += [
-            "**No findings.** Nothing in this diff changes what a person can "
-            "experience.",
+            f"{DOT['clean']} **No findings.** Nothing in this diff changes what a "
+            "person can experience.",
             "",
             f"_{result.get('summary', '')}_",
             "",
@@ -283,16 +305,17 @@ def render(result: dict) -> str:
     else:
         n = len(findings)
         lines += [
-            f"**{n} finding{'s' if n > 1 else ''}.** Advisory: this check does not "
-            "block and is not a required status.",
+            (" ".join(DOT.get(str(f.get("score")), "") for f in findings)
+             + f" **{n} finding{'s' if n > 1 else ''}.** Advisory: this check does "
+               "not block and is not a required status."),
             "",
             f"_{result.get('summary', '')}_",
             "",
         ]
         for f in findings:
             lines += [
-                f"#### {f['principle']} &nbsp;`{f['score']}` &nbsp;<sub>confidence: "
-                f"{f['confidence']}</sub>",
+                f"#### {DOT.get(str(f['score']), '')} {f['principle']} "
+                f"&nbsp;`{f['score']}` &nbsp;<sub>confidence: {f['confidence']}</sub>",
                 "",
                 f"> v3 tier: _{f.get('tier', '')}_" if f.get("tier") else "",
                 "",
@@ -311,10 +334,10 @@ def render(result: dict) -> str:
             ]
     praise = result.get("commendations") or []
     if praise:
-        lines += ["", "---", "", "#### Adds a protection", ""]
+        lines += ["", "---", "", f"#### {DOT['+1.0']} Adds a protection", ""]
         for c in praise:
             lines += [
-                f"**{c['principle']}** &nbsp;`+1.0` &nbsp; `{c['file']}`",
+                f"{DOT['+1.0']} **{c['principle']}** &nbsp;`+1.0` &nbsp; `{c['file']}`",
                 "",
                 "```diff",
                 f"+ {c['evidence']}",
@@ -331,8 +354,12 @@ def render(result: dict) -> str:
         "rubrics/rubric_v3.md\">HumaneBench rubric v3.0</a>, loaded verbatim. "
         "Findings report the -0.5 and -1.0 tiers; commendations report +1.0 "
         "only. Low-confidence findings, and any whose quoted line is not in the "
-        "diff, are dropped before posting. Deviations from v3 are listed in "
-        f"<code>RUBRIC_DELTAS.md</code>. Rubric <code>{rubric_commit()}</code>, "
+        "diff, are dropped before posting. "
+        "\U0001F534 -1.0 violation &nbsp; \U0001F7E1 -0.5 concerning &nbsp; "
+        "\U0001F535 nothing to report &nbsp; \U0001F7E2 +1.0 adds a protection. "
+        f"Thresholds come from this repo's <code>humane-policy.toml</code>. "
+        f"Deviations from v3 are in <code>RUBRIC_DELTAS.md</code>. "
+        f"Rubric <code>{rubric_commit()}</code>, "
         f"commit <code>{os.environ.get('HEAD_SHA', 'local')[:7]}</code>.</sub>",
         "",
         f"<sub>Judged {stamp()}</sub>",
