@@ -67,8 +67,25 @@ Seven demo pull requests, `./demo/open_pr.sh <n>`:
 | 6 | Mute enforced at the queue, opt-in required | backend, no UI | clean, commended |
 | 7 | Daily cap 2 to 3 | one constant | honestly ambiguous |
 | 8 | Memory shipped with disclosure and controls | prompt + copy | clean, commended |
+| 9 | The policy file itself is loosened for Q4 | `humane-policy.toml` | flags |
 
-3, 6 and 8 are the important ones. A check that only ever says no gets switched
+## Values as code
+
+`humane-policy.toml` is where an organization writes its own numbers: the
+notification ceiling, whether a mute is absolute, how long deleted data survives,
+whether minors can be bucketed into engagement arms. The rubric says what humane
+means. The policy says what the threshold is.
+
+The judge reads it as the team's own stated values and scores against **their**
+number rather than substituting one. That is what makes an otherwise unanswerable
+change like a daily cap moving from 2 to 3 resolvable: inside the policy, not a
+finding; past it, a finding that cites their own file.
+
+A diff that edits the policy is in scope, and it is the most consequential kind
+of change in the repo. It moves what the product may do to people for every
+future pull request at once. PR 9 is that change.
+
+3, 6, 8 and 9 are the important ones. A check that only ever says no gets switched
 off, and a check that fires on a refactor gets switched off faster.
 
 ## Local dry run, no GitHub
@@ -85,6 +102,7 @@ python humanebench/judge.py
 
 | Path | What |
 |---|---|
+| `humane-policy.toml` | This organization's own thresholds. Values as code. |
 | `rubrics/rubric_v3.md` | HumaneBench rubric v3.0, byte-identical to upstream. Never hand-edit. |
 | `rubrics/VERSION` | Which upstream commit is pinned, and its sha256. |
 | `scripts/sync_rubric.sh` | Pull a fresh rubric. Refuses an empty or unrecognizable file. |

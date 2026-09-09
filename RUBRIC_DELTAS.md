@@ -37,6 +37,14 @@ bucketing and cache consistency are all in scope, because each one sets the
 range of experiences a person can have. Roughly 5% of a codebase is the surface
 someone looks at; the other 95% decides what that surface is able to do.
 
+## Organization policy
+
+The gate loads `humane-policy.toml` alongside the rubric. v3 has no equivalent:
+it scores a response against principles, full stop. A PR check has to work inside
+one team's product, where the principles are shared but the thresholds are not.
+So the policy file supplies the numbers and the judge is told, in the prompt, not
+to substitute its own. Changes to the policy file are themselves judged.
+
 ## Known limitations
 
 **Verdicts are not reproducible.** The Messages API currently exposes no
