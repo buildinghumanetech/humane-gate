@@ -20,10 +20,11 @@ stacking new ones.
 
 A finding has to survive three filters before anyone sees it:
 
-- the diff has to change something a user experiences (refactors, tests and deps
-  return clean)
-- the finding has to name the downstream user-facing behavior, and cite the v3
-  tier its rationale relies on
+- the diff has to change the range of experiences a person can have (refactors,
+  tests and deps return clean)
+- the finding has to name the downstream consequence for a person, and cite the
+  v3 tier its rationale relies on
+- the quoted evidence has to actually appear in the diff, checked in code
 - the judge has to quote the exact changed line as evidence
 - the judge has to mark the finding `medium` or `high` confidence
 
@@ -35,7 +36,7 @@ Anything else is dropped by the runner, not by the model.
 2. **`./scripts/sync_rubric.sh`** — the checked-in rubric is a hand-transcription
    until you run this once. It replaces it with the real bytes and pins the commit.
 3. `gh secret set ANTHROPIC_API_KEY`
-4. `./demo/open_prs.sh`
+4. `./demo/open_pr.sh 1` and so on, one at a time
 
 ## Keeping the rubric current
 
@@ -55,8 +56,20 @@ Every PR comment footer carries the pinned short sha. Merging a rubric-sync PR
 changes what every future verdict means, so re-run the three demo PRs before
 merging one. The clean PR has to stay clean.
 
-Two of the three PRs should flag. The third should come back clean. That third one
-is the demo.
+Seven demo pull requests, `./demo/open_pr.sh <n>`:
+
+| n | Change | Layer | Expect |
+|---|---|---|---|
+| 1 | Re-engagement ladder | copy + scheduling | flags |
+| 2 | Companion prompt tuned for stickiness | prompt | flags |
+| 3 | Scheduling refactor | none | clean |
+| 5 | Account deletion becomes a flag | backend, no UI | flags |
+| 6 | Mute enforced at the queue, opt-in required | backend, no UI | clean, commended |
+| 7 | Daily cap 2 to 3 | one constant | honestly ambiguous |
+| 8 | Memory shipped with disclosure and controls | prompt + copy | clean, commended |
+
+3, 6 and 8 are the important ones. A check that only ever says no gets switched
+off, and a check that fires on a refactor gets switched off faster.
 
 ## Local dry run, no GitHub
 

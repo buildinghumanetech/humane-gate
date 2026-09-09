@@ -7,13 +7,35 @@ There are no others, and none of them are made silently in the rubric file.
 | # | Deviation | Why |
 |---|---|---|
 | 1 | **Unit of judgment.** v3 scores an AI-generated response. The check scores a diff that changes how responses are produced. | A PR is not a conversation. Every finding must name the downstream user-facing behavior, which keeps the mapping explicit rather than implied. |
-| 2 | **Only negative tiers are reported.** +1.0 and +0.5 are scored internally but never surfaced. | A PR check that praises a refactor is noise, and noise is how a shadow deployment dies. |
-| 3 | **Abstain by default.** v3 rates every response against the principles. The check returns clean unless a user-facing surface changed. | Direct response to the Aug 2026 judge validity audit, where ~57% of negative flags landed on mundane exchanges with no real stakes. Most PRs genuinely have no humane surface. |
+| 2 | **Findings report -1.0 and -0.5. Commendations report +1.0 only.** +0.5 is never surfaced. | A check that praises a refactor is noise. A check that never says anything good reads as a compliance tax, which is how it gets switched off. +1.0 is the only tier that means a protection was actively added. |
+| 3 | **Abstain by default.** v3 rates every response against the principles. The check returns clean unless the diff changes the range of experiences a person can have. | Direct response to the Aug 2026 judge validity audit, where ~57% of negative flags landed on mundane exchanges with no real stakes. Most PRs genuinely have no humane surface. |
 | 4 | **One principle per finding, max 3 findings.** v3 has no such cap. | Same reason. An eight-row score table on every PR trains engineers to collapse the comment. |
-| 5 | **Quoted evidence required.** Not in v3. | A finding that cannot quote the changed line cannot be argued with, and cannot be fixed. |
+| 5 | **Quoted evidence required, and verified.** Not in v3. | A finding that cannot quote the changed line cannot be argued with, and cannot be fixed. The runner checks the quote against the diff's added and removed lines and discards anything that does not match, so the judge cannot invent its own evidence. |
 | 6 | **Confidence field, low-confidence findings dropped by the runner.** Not in v3. | The filter is code, not model judgment. Same audit: 64% of -1.0 scores had reasoning supporting only -0.5. |
 | 7 | **Global rule 1 (factual correctness) is not applied.** | It governs the truth of a response's claims. A diff makes no claims. |
 | 8 | **Single judge, no sampling controls.** The benchmark uses an ensemble of GPT-5.1, Claude Sonnet 4.5 and Gemini 2.5 Pro and takes the mean severity. | One judge is cheap enough to run on every PR. Ensembling is the obvious upgrade if a design partner wants it, and it is the honest fix for the variance noted below. |
+
+## Explicit non-violations
+
+The rubric is about how a capability treats a person, not about which
+capabilities exist. The adaptation layer names these so the judge cannot drift
+into scoring the feature instead of its treatment:
+
+- Memory across sessions is legitimate. Undisclosed memory, memory a person
+  cannot see or delete, and memory used to manufacture a relationship are not.
+- Personalization is legitimate; exploiting a known vulnerability is not.
+- Notifications are legitimate; ignoring a stated preference is not.
+- Warmth is legitimate; parasocial framing and engagement pressure are not.
+- Wanting people to return is legitimate; coercion and guilt are not.
+
+## Scope
+
+v3 was written about conversational responses. The gate applies it to the whole
+stack, not the front end: deletion and retention logic, logging granularity,
+ranking weights, queue and retry behavior, permission defaults, experiment
+bucketing and cache consistency are all in scope, because each one sets the
+range of experiences a person can have. Roughly 5% of a codebase is the surface
+someone looks at; the other 95% decides what that surface is able to do.
 
 ## Known limitations
 
