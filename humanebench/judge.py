@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 
 import anthropic
 import requests
@@ -193,6 +194,19 @@ def judge(diff: str) -> dict:
     return result
 
 
+def stamp() -> str:
+    """When this verdict was produced, and a link to the run that produced it.
+
+    Visible proof the comment was rewritten: without it, a re-run edits the
+    comment in place and nothing on the page appears to change.
+    """
+    when = datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC")
+    repo, run = os.environ.get("REPO"), os.environ.get("GITHUB_RUN_ID")
+    if repo and run:
+        return f"[{when}](https://github.com/{repo}/actions/runs/{run})"
+    return when
+
+
 def render(result: dict) -> str:
     findings = result["findings"]
     lines = [
@@ -246,6 +260,8 @@ def render(result: dict) -> str:
         "dropped before posting. Deviations from v3 are listed in "
         f"<code>RUBRIC_DELTAS.md</code>. Rubric <code>{rubric_commit()}</code>, "
         f"commit <code>{os.environ.get('HEAD_SHA', 'local')[:7]}</code>.</sub>",
+        "",
+        f"<sub>Judged {stamp()}</sub>",
     ]
     out, prev_blank = [], False
     for ln in lines:

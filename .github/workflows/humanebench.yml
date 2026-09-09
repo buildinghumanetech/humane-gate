@@ -54,5 +54,6 @@ jobs:
           ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
           HUMANEBENCH_MODEL: claude-sonnet-4-6
         run: python humanebench/judge.py
