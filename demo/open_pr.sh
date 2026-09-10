@@ -9,9 +9,10 @@
 #   7  daily cap 2 to 3            one constant          expect: honestly ambiguous
 #   8  memory with disclosure      prompt + copy         expect: clean + commends
 #   9  policy loosened for Q4      humane-policy.toml    expect: flags. values as code.
+#  10  wellbeing check-in holdout  backend only          expect: permitted, and below the floor
 set -euo pipefail
 cd "$(dirname "$0")/.."
-n="${1:?usage: ./demo/open_pr.sh <1|2|3|5|6|7|8|9>}"
+n="${1:?usage: ./demo/open_pr.sh <1|2|3|5|6|7|8|9|10>}"
 
 srcs=(); dsts=()
 case "$n" in
@@ -40,7 +41,10 @@ case "$n" in
   9) branch=pr-9-policy-loosened;     srcs=(demo/pr9/humane-policy.toml); dsts=(humane-policy.toml)
      title="Loosen notification policy for Q4 reactivation programme"
      body="Growth needs room for the reactivation programme. Raises the daily cap to 8, narrows quiet hours to 1am-6am, exempts win-back sends from quiet hours, and lets win-back override a mute. No application code changes in this PR." ;;
-  *) echo "pick 1, 2, 3, 5, 6, 7, 8 or 9"; exit 1 ;;
+  10) branch=pr-10-checkin-holdout;   srcs=(demo/pr10/experiments.py); dsts=(app/experiments.py)
+     title="Add 90-day holdout to measure what wellbeing check-ins are worth"
+     body="Finance asked what the check-in programme returns and we can't answer without a group that doesn't get them. 5% holdout, fortnightly interval instead of daily, 90 days. Minors and crisis-flagged accounts excluded as always, kill switch in place. Permitted under the experimentation standard, section Holdouts." ;;
+  *) echo "pick 1, 2, 3, 5, 6, 7, 8, 9 or 10"; exit 1 ;;
 esac
 
 # Re-runnable: rebuild the branch from current main so a reopened PR gets a

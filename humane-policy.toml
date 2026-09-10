@@ -31,6 +31,7 @@ reason = "these two are where our regulatory obligations and our user promises l
 # does, that is not a finding, and the check says which document permits it.
 paths = [
   "docs/privacy-policy.md",
+  "docs/experimentation-standard.md",
 ]
 
 [meta]
