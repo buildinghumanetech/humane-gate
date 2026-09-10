@@ -3,6 +3,10 @@ name: humanebench
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  # A person replying "/humane accept" is the only conversation CI can have.
+  # Re-judge on the reply so the record appears where the decision was made.
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       pr:
@@ -18,6 +22,12 @@ jobs:
   advisory:
     name: advisory
     runs-on: ubuntu-latest
+    # Comment events fire on issues too, and on every comment. Only a
+    # "/humane accept" on a pull request is worth a run.
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request != null &&
+       contains(github.event.comment.body, '/humane accept'))
     steps:
       # The gate runs from the default branch, never from the pull request.
       # A PR cannot edit the rubric, the prompt or the judge and then be scored
@@ -31,7 +41,7 @@ jobs:
       # never executed. Only its diff text is read.
       - name: Fetch PR head read-only
         run: |
-          pr="${{ github.event.pull_request.number || inputs.pr }}"
+          pr="${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}"
           git fetch --no-tags --quiet origin "+refs/pull/$pr/head:refs/humane/pr-head"
           head=$(git rev-parse refs/humane/pr-head)
           base=$(git merge-base "origin/${{ github.event.repository.default_branch }}" "$head")

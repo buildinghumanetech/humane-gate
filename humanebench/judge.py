@@ -14,6 +14,7 @@ Env:
   DRY_RUN             set to 1 to print the result and skip all GitHub calls
 """
 
+import hashlib
 import json
 import os
 import re
@@ -34,8 +35,9 @@ MARKER = "<!-- humanebench-shadow -->"
 # blocks nothing; an engineer who sees red reads it as a stop sign and stops
 # reading. Orange is the strongest thing here and it means "worth a conversation".
 DOT = {"clear": "\U0001F7E2", "review": "\U0001F7E1", "discuss": "\U0001F7E0",
-       "question": "\U0001F535", "+1.0": "\U0001F7E2"}
-VERDICT_WORD = {"clear": "Clear", "review": "Review", "discuss": "Discuss"}
+       "question": "\U0001F535", "+1.0": "\U0001F7E2", "accepted": "\U000026AA"}
+VERDICT_WORD = {"clear": "Clear", "review": "Review", "discuss": "Discuss",
+                "accepted": "Accepted"}
 DROP_CONFIDENCE = {"low"}
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -219,6 +221,7 @@ PRINCIPLES = [
 ]
 
 FINDING_FIELDS = [
+    "unless",
     "principle", "score", "tier", "confidence",
     "file", "evidence", "behavior", "rationale", "suggestion",
 ]
@@ -305,6 +308,10 @@ SCHEMA = {
                     "behavior": {"type": "string"},
                     "rationale": {"type": "string"},
                     "suggestion": {"type": "string"},
+                    # The condition that would make this finding wrong, when
+                    # one exists. "-1.0 unless X" is an honest thing to say and
+                    # a diff cannot answer it. Empty string when unconditional.
+                    "unless": {"type": "string"},
                 },
             },
         },
@@ -340,7 +347,7 @@ def evidence_holds(quote: str, lines: list) -> bool:
     return False
 
 
-def judge(diff: str, context: str = "") -> dict:
+def judge(diff: str, context: str = "", signed: dict = None) -> dict:
     system = build_system()
 
     # An org-scoped key must name a workspace explicitly. A workspace-scoped key
@@ -377,6 +384,7 @@ def judge(diff: str, context: str = "") -> dict:
 
     # Three filters, all in code rather than model judgment. This is the whole
     # anti-noise story: the judge proposes, the runner disposes.
+    result["acceptances"] = signed or {}
     lines = changed_lines(diff)
     kept, dropped = [], []
     for f in result.get("findings", []):
@@ -431,6 +439,27 @@ def judge(diff: str, context: str = "") -> dict:
     result["covered"] = excused[:3]
     result["floor_breached_by_policy"] = breached[:3]
 
+    for item in result["findings"] + result["floor_breached_by_policy"]:
+        item["id"] = finding_id(item.get("principle", ""), item.get("file", ""))
+
+    # Signed acceptances. A finding a person has taken responsibility for stops
+    # driving the verdict, and starts being a record of who decided what.
+    signed = result.get("acceptances") or {}
+    head = os.environ.get("HEAD_SHA", "")
+    for item in result["findings"] + result["floor_breached_by_policy"]:
+        got = signed.get(item["id"])
+        if not got:
+            continue
+        # Accepted against an older head. The code moved after somebody signed
+        # for it, so the signature no longer covers what is now in the branch.
+        item["accepted"] = dict(got, stale=bool(got.get("sha") and head
+                                                and got["sha"] != head))
+
+    live_findings = [f for f in result["findings"]
+                     if not f.get("accepted") or f["accepted"]["stale"]]
+    live_breaches = [b for b in result["floor_breached_by_policy"]
+                     if not b.get("accepted") or b["accepted"]["stale"]]
+
     # The verdict is computed here, not taken from the model. Severity belongs to
     # the organization's floor, which is a fact about their policy file, not a
     # judgment call.
@@ -438,11 +467,16 @@ def judge(diff: str, context: str = "") -> dict:
     # A floor breach is a violation on a floor principle, not merely a mention of
     # one. Without the severity test every bad diff lands on "discuss" and the
     # three tiers collapse into two, which is the wall-of-red problem in orange.
-    if breached or any(f.get("principle") in floor and f.get("score") == "-1.0"
-                       for f in result["findings"]):
+    if live_breaches or any(f.get("principle") in floor and f.get("score") == "-1.0"
+                            for f in live_findings):
         result["verdict"] = "discuss"
-    elif result["findings"] or result["unresolved"]:
+    elif live_findings or result["unresolved"]:
         result["verdict"] = "review"
+    elif any(i.get("accepted") for i in
+             result["findings"] + result["floor_breached_by_policy"]):
+        # Everything raised has been signed for. Not the same as nothing raised,
+        # and the comment should not pretend otherwise.
+        result["verdict"] = "accepted"
     else:
         result["verdict"] = "clear"
     for why, which in dropped:
@@ -476,6 +510,12 @@ def render(result: dict) -> str:
     praise = result.get("commendations") or []
     breached = result.get("floor_breached_by_policy") or []
     excused = result.get("covered") or []
+    signed = [i for i in findings + breached
+              if i.get("accepted") and not i["accepted"]["stale"]]
+    stale = [i for i in findings + breached
+             if i.get("accepted") and i["accepted"]["stale"]]
+    findings = [f for f in findings if f not in signed]
+    breached = [b for b in breached if b not in signed]
 
     lines = [
         MARKER,
@@ -486,6 +526,14 @@ def render(result: dict) -> str:
         result.get("summary", ""),
         "",
     ]
+
+    if verdict == "accepted":
+        lines += [
+            "Everything this check raised has been accepted by someone with "
+            "the standing to accept it, on the record, with a reason. Nothing "
+            "here is unresolved and nothing was silently dropped.",
+            "",
+        ]
 
     if verdict == "discuss":
         lines += [
@@ -512,6 +560,10 @@ def render(result: dict) -> str:
                 "or the floor is wrong, and that is a decision for a person.",
                 "",
                 f"<sub>`{b['file']}`</sub>",
+                "",
+                f"<sub>If this is the decision the team means to make, "
+                f"`/humane accept {b.get('id', '')} &lt;your reason&gt;` puts a "
+                "name and a reason on it. That record is the point.</sub>",
                 "",
             ]
 
@@ -544,8 +596,8 @@ def render(result: dict) -> str:
         ]
         for f in findings:
             lines += [
-                f"#### {f['principle']} &nbsp;<sub>{f['score']} &middot; "
-                f"confidence {f['confidence']}</sub>",
+                f"#### {f['principle']} &nbsp;<sub>`{f.get('id', '')}` &middot; "
+                f"{f['score']} &middot; confidence {f['confidence']}</sub>",
                 "",
                 f"> v3 tier: _{f.get('tier', '')}_" if f.get("tier") else "",
                 "",
@@ -562,7 +614,54 @@ def render(result: dict) -> str:
                 f"**Smallest fix:** {f['suggestion']}",
                 "",
             ]
+            # A conditional finding. CI cannot hold a conversation, so the
+            # question is asked in the only place a reply can arrive.
+            if f.get("unless"):
+                lines += [
+                    f"**Unless:** {f['unless']} If that is true, say so and "
+                    "this closes:",
+                    "",
+                    f"```\n/humane accept {f.get('id', '')} "
+                    "<why it is true>\n```",
+                    "",
+                ]
+            else:
+                lines += [
+                    f"<sub>Disagree? `/humane accept {f.get('id', '')} "
+                    "&lt;your reason&gt;` records the decision under your name "
+                    "and closes this.</sub>",
+                    "",
+                ]
         lines += ["</details>", ""]
+
+    # The regulator answer. A named person, a reason in their own words, a
+    # timestamp GitHub will not let anyone forge, and the commit it covers.
+    # This is the difference between a wall of unexplained red and a decision.
+    if signed:
+        lines += ["### Accepted, on the record", ""]
+        for i in signed:
+            a = i["accepted"]
+            lines += [
+                f"**{i['principle']}** &nbsp;<sub>`{i['id']}`</sub>",
+                "",
+                f"> {a['reason']}",
+                "",
+                f"[@{a['who']}]({a['url']}) &middot; {a['standing']} &middot; "
+                f"{a['when'][:10]} &middot; covers `{a['sha'][:7] or 'head'}`",
+                "",
+            ]
+
+    if stale:
+        lines += ["### Acceptance no longer covers this", ""]
+        for i in stale:
+            a = i["accepted"]
+            lines += [
+                f"**{i['principle']}** &nbsp;<sub>`{i['id']}`</sub> was accepted "
+                f"by [@{a['who']}]({a['url']}) at `{a['sha'][:7]}`. The branch "
+                "has moved since. They signed for code that is no longer what "
+                "is here, so this is open again.",
+                "",
+            ]
 
     # Deference, shown rather than claimed. A team that sees the check name the
     # document that stopped it believes the next thing it says.
@@ -578,7 +677,8 @@ def render(result: dict) -> str:
         "---",
         "<sub>"
         f"{DOT['clear']} clear &nbsp; {DOT['review']} review &nbsp; "
-        f"{DOT['discuss']} discuss &nbsp; {DOT['question']} needs context. "
+        f"{DOT['discuss']} discuss &nbsp; {DOT['question']} needs context "
+        f"&nbsp; {DOT['accepted']} accepted by a person. "
         "There is no red, because this check does not block anything. "
         "Scored against "
         "<a href=\"https://github.com/buildinghumanetech/humanebench/blob/main/"
@@ -600,6 +700,85 @@ def render(result: dict) -> str:
         out.append(ln)
         prev_blank = ln == ""
     return "\n".join(out)
+
+
+# A person may accept a finding. A bot, a passer-by and a fork may not.
+# GitHub reports the commenter's standing on the repo, and only these three
+# mean "this account can merge here". Without the check, "signed by a person"
+# is decoration.
+CAN_ACCEPT = {"OWNER", "MEMBER", "COLLABORATOR"}
+ACCEPT_RE = re.compile(
+    r"^\s*/humane\s+accept\s+([A-Z]{2,4}-[0-9a-f]{6})\s+(.+)$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def finding_id(principle: str, path: str) -> str:
+    """A short handle a person can type into a comment.
+
+    Derived from the principle and the file, not from the judge's wording. The
+    judge is not reproducible: re-running it rewrites sentences, and an id built
+    from a sentence would change underneath an acceptance that already cited it.
+    Principle and file are the two things that stay put.
+    """
+    initials = "".join(w[0] for w in principle.split() if w[0].isupper())[:4]
+    digest = hashlib.sha256(f"{principle}|{path}".encode()).hexdigest()[:6]
+    return f"{initials or 'HB'}-{digest}"
+
+
+def acceptances(repo: str, pr: str) -> dict:
+    """Signed acceptances read out of the pull request conversation.
+
+    The record lives in the comment thread rather than in a file the gate
+    writes. GitHub already stores the author, the timestamp and the edit history
+    of every comment, and it will not let one account post as another. Building
+    a second, weaker ledger next to that one would be worse in every way that
+    matters to somebody auditing it later.
+    """
+    out = {}
+    try:
+        comments = gh(
+            "GET", f"/repos/{repo}/issues/{pr}/comments?per_page=100").json()
+    except Exception as exc:
+        print(f"humanebench: could not read comments ({exc})")
+        return out
+    for c in comments if isinstance(comments, list) else []:
+        who = (c.get("user") or {}).get("login", "")
+        standing = c.get("author_association", "NONE")
+        for fid, reason in ACCEPT_RE.findall(c.get("body") or ""):
+            fid = fid.upper()
+            if standing not in CAN_ACCEPT:
+                print(f"humanebench: ignoring accept of {fid} by {who} "
+                      f"({standing} cannot accept on this repo)")
+                continue
+            out[fid] = {
+                "id": fid,
+                "who": who,
+                "standing": standing.title(),
+                "reason": reason.strip().rstrip("."),
+                "when": c.get("created_at", ""),
+                "url": c.get("html_url", ""),
+                # What the code looked like when they signed. An acceptance is
+                # of a specific risk in a specific diff, not a standing waiver.
+                "sha": sha_at(repo, pr, c.get("created_at", "")),
+            }
+    return out
+
+
+def sha_at(repo: str, pr: str, when: str) -> str:
+    """The head commit as of a moment in the conversation."""
+    if not when:
+        return ""
+    try:
+        commits = gh("GET", f"/repos/{repo}/pulls/{pr}/commits?per_page=100").json()
+    except Exception:
+        return ""
+    latest = ""
+    for c in commits if isinstance(commits, list) else []:
+        stamped = (((c.get("commit") or {}).get("committer") or {}).get("date")) or ""
+        if stamped and stamped <= when:
+            latest = c.get("sha", "")
+    return latest
 
 
 def gh(method: str, path: str, **kw):
@@ -636,6 +815,7 @@ def post_check(repo: str, sha: str, result: dict):
         "output": {
             "title": {"clear": "Clear",
                       "review": "Review before merge (advisory)",
+                      "accepted": "Accepted by a named reviewer",
                       "discuss": "Worth a conversation (advisory)"}.get(
                           result.get("verdict", "clear"), "Advisory"),
             "summary": result.get("summary", ""),
@@ -650,7 +830,10 @@ def main():
                   "findings": [], "commendations": [], "unresolved": [],
                   "covered": []}
     else:
-        result = judge(diff, context)
+        repo, pr = os.environ.get("REPO"), os.environ.get("PR_NUMBER")
+        signed = acceptances(repo, pr) if repo and pr and not os.environ.get(
+            "DRY_RUN") else {}
+        result = judge(diff, context, signed)
 
     if os.environ.get("DRY_RUN"):
         print(json.dumps(result, indent=2))

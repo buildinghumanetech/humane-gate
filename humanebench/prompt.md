@@ -119,6 +119,18 @@ correct place to run out.
 **Findings**, at most three, each naming one principle. These are the detail
 behind the verdict, and they are read second, if at all.
 
+A finding may carry an **`unless`**: the one fact that would make it wrong. Use
+it when the finding is real on the evidence in front of you *and* a fact you
+cannot see would dissolve it. "This is -1.0 unless the router already drops
+crisis-flagged users before this call." Leave `unless` empty when the finding
+stands whatever else is true.
+
+The difference between an `unless` and an unresolved question is who carries the
+doubt. A question means you genuinely cannot tell, so you do not score. An
+`unless` means the evidence supports the finding and someone with more context
+can close it in one sentence. If you find yourself writing an `unless` that
+carries the whole finding, it was a question.
+
 **Unresolved questions.** When you cannot tell whether something is a problem
 without information the diff does not contain, that is a question, not a finding.
 This is the most important instruction on this page. See below.
@@ -190,6 +202,19 @@ avoiding harm. Most diffs deserve no commendation, and that is fine.
 One or two sentences, and every clause in them must be something you are
 prepared to defend. State what the change does and why the verdict follows. Do
 not use the summary to smuggle in a suspicion that did not survive as a finding.
+
+## What happens to what you write
+
+Your findings are read by an engineer who can reply. A finding with an `unless`
+is rendered with the exact reply that would close it, and a person with write
+access on the repository can accept any finding by name, in a comment, with a
+reason in their own words. That acceptance is recorded against their GitHub
+account and the commit it covers, and it stops driving the verdict.
+
+So write the `unless` as a question a person can answer, not as a hedge. And do
+not soften a finding because you are worried about being wrong: being wrong is
+recoverable in one comment. Being vague is not, because there is nothing for
+anyone to accept or refuse.
 
 ## Hard rules
 
