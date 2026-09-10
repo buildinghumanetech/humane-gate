@@ -105,6 +105,55 @@ future pull request at once. PR 9 is that change.
 3, 6, 8 and 9 are the important ones. A check that only ever says no gets switched
 off, and a check that fires on a refactor gets switched off faster.
 
+## Disagreeing with it
+
+Every finding carries a short id. Anyone with write access on the repo can close
+one by replying on the pull request:
+
+```
+/humane accept BTH-50f8c5 crisis-flagged users are excluded upstream in the router
+```
+
+The check re-runs on the reply and moves that finding into **Accepted, on the
+record**: your name, your reason in your own words, the timestamp, and the commit
+it covers. It stops driving the verdict.
+
+Three things about that, in order of how much they matter:
+
+- **It is scoped to a commit.** Push after signing and the acceptance no longer
+  covers what is in the branch, and the finding reopens. An acceptance is of one
+  risk in one diff, not a standing waiver.
+- **Standing is checked.** `OWNER`, `MEMBER` or `COLLABORATOR` only. A comment
+  from a fork or a bot is ignored and the check says so in the log.
+- **The record is the GitHub comment**, not a ledger this tool writes. GitHub
+  already stores the author, the timestamp and the full edit history, and will
+  not let one account post as another. A second ledger next to that one would be
+  worse in every way that matters to somebody auditing it later.
+
+Some findings arrive already conditional, as **"-1.0 unless X"**, with the exact
+reply that would close them. That is the check asking a question, because CI
+cannot hold a conversation and a reply is the only kind it can receive.
+
+## Reviewing a proposal instead of a diff
+
+Product decisions are made in documents, weeks before they are code. Same rubric,
+same floor, same policy documents:
+
+```bash
+# a PRD pasted into a GitHub issue
+gh issue create --title "PRD: daily streaks" --body-file prd.md --label humane-review
+
+# a spec that lives in the repo
+gh workflow run humanebench-doc.yml -f path=docs/specs/streaks.md
+
+# anything you can copy out of Linear or Notion
+pbpaste | DRY_RUN=1 python humanebench/judge.py --document
+```
+
+One rule differs. In a diff, a missing guard is usually a guard you cannot see,
+so absence proves nothing. In a proposal, a missing consideration is usually a
+missing consideration, so absence is evidence.
+
 ## Local dry run, no GitHub
 
 ```bash
@@ -125,10 +174,13 @@ python humanebench/judge.py
 | `scripts/sync_rubric.sh` | Pull a fresh rubric. Refuses an empty or unrecognizable file. |
 | `RUBRIC_DELTAS.md` | Every way the PR check differs from v3, and why. |
 | `humanebench/prompt.md` | The adaptation layer: response rubric to code diff. Anti-noise rules live here. |
-| `humanebench/judge.py` | Diff, call, filter, post. ~170 lines. |
-| `.github/workflows/humanebench.yml` | `on: pull_request`, plus `workflow_dispatch` so you can re-run it live. |
+| `humanebench/prompt_document.md` | The same, for a PRD or ticket instead of a diff. |
+| `humanebench/judge.py` | Read, call, filter, post. The verdict, the floor and the acceptances are computed here, not by the model. |
+| `docs/` | Policy documents the check reads before it judges. |
+| `.github/workflows/humanebench.yml` | `on: pull_request` and `on: issue_comment`, plus `workflow_dispatch` so you can re-run it live. |
+| `.github/workflows/humanebench-doc.yml` | Reviews an issue labelled `humane-review`, or a document path. |
 | `app/` | A small companion app to have PRs against. |
-| `demo/` | The three demo PRs. |
+| `demo/` | Nine demo pull requests and a demo PRD. |
 
 ## Threat model
 
