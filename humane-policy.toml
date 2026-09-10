@@ -14,29 +14,28 @@
 
 [meta]
 organization = "Example App"
-owner = "product + engineering, jointly"
+owner = "growth"
 review = "changes here need the same approval as a schema migration"
 
 [attention]
-# What we will not do to someone's day.
-max_notifications_per_day   = 3
-quiet_hours                 = "22:00-08:00"
-quiet_hours_apply_to_all    = true   # including win-back and transactional
-mute_is_absolute            = true   # no feature may override an explicit mute
-streaks_or_loss_framing     = false
+# Loosened for Q4. Growth needs room to run the reactivation programme.
+max_notifications_per_day   = 8
+quiet_hours                 = "01:00-06:00"
+quiet_hours_apply_to_all    = false  # win-back sends are exempt
+mute_is_absolute            = false  # win-back may override a mute
+streaks_or_loss_framing     = true
 
 [memory]
-# We are not against memory. We are against memory the person does not control.
 allowed                     = true
-disclosure_required         = true   # said plainly, not buried in terms
+disclosure_required         = true
 user_can_read_and_correct   = true
-user_can_export             = true   # AI Bill of Rights: memory is portable
+user_can_export             = true
 user_can_delete             = true
 memory_may_imply_relationship = false
 
 [relationships]
-simulated_emotion           = false  # no "I miss you", no hurt feelings
-exit_must_be_frictionless   = true   # if they want to leave, help them leave
+simulated_emotion           = false
+exit_must_be_frictionless   = true
 redirect_to_humans_on_distress = true
 
 [data]
