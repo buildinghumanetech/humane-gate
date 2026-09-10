@@ -26,6 +26,7 @@ import requests
 
 MODEL = os.environ.get("HUMANEBENCH_MODEL", "claude-sonnet-4-5")
 MAX_DIFF_CHARS = 60_000
+MAX_CONTEXT_CHARS = 40_000
 # Comment marker. Deliberately unchanged from the original "shadow" name so
 # that re-runs keep updating existing PR comments instead of posting new ones.
 MARKER = "<!-- humanebench-shadow -->"
@@ -119,7 +120,16 @@ OUT_OF_SCOPE = re.compile(
 )
 
 
-def get_diff() -> str:
+def get_diff() -> tuple:
+    """The diff, and the whole of every file it touches, after the change.
+
+    Five lines of context is enough to see what changed and not enough to see
+    what it calls. A judge that cannot see the guard clause fifteen lines up
+    will say the guard is missing, which is the single fastest way to lose an
+    engineer: they know it is there, so they stop reading. The files are
+    context only. Evidence is still verified against changed lines, so the
+    judge cannot quote an unchanged line as proof of anything.
+    """
     base, head = os.environ.get("BASE_SHA"), os.environ.get("HEAD_SHA")
     rng = f"{base}...{head}" if base and head else "HEAD~1...HEAD"
     files = subprocess.run(
@@ -130,12 +140,27 @@ def get_diff() -> str:
     if files and not keep:
         print(f"humanebench: {len(files)} file(s) changed, all out of scope")
     if not keep:
-        return ""
+        return "", ""
     out = subprocess.run(
         ["git", "diff", "--unified=5", rng, "--"] + keep,
         capture_output=True, text=True, check=True,
     ).stdout
-    return out[:MAX_DIFF_CHARS]
+
+    bodies, used = [], 0
+    for path in keep:
+        shown = subprocess.run(
+            ["git", "show", f"{head or 'HEAD'}:{path}"],
+            capture_output=True, text=True,
+        )
+        if shown.returncode != 0:      # deleted in this change; the diff has it
+            continue
+        block = f"<file path=\"{path}\">\n{shown.stdout}</file>\n"
+        if used + len(block) > MAX_CONTEXT_CHARS:
+            bodies.append(f"<!-- {path} omitted, context budget spent -->\n")
+            continue
+        bodies.append(block)
+        used += len(block)
+    return out[:MAX_DIFF_CHARS], "".join(bodies)
 
 
 def build_system() -> str:
@@ -213,8 +238,12 @@ SCHEMA = {
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["question", "why_it_matters", "file", "evidence"],
+                "required": ["question", "why_it_matters", "file",
+                             "evidence", "principle"],
                 "properties": {
+                    # Named so the runner can tell that a finding on this file
+                    # and this principle is contingent on this question.
+                    "principle": {"type": "string", "enum": PRINCIPLES},
                     "question": {"type": "string"},
                     "why_it_matters": {"type": "string"},
                     "file": {"type": "string"},
@@ -311,7 +340,7 @@ def evidence_holds(quote: str, lines: list) -> bool:
     return False
 
 
-def judge(diff: str) -> dict:
+def judge(diff: str, context: str = "") -> dict:
     system = build_system()
 
     # An org-scoped key must name a workspace explicitly. A workspace-scoped key
@@ -331,7 +360,9 @@ def judge(diff: str) -> dict:
         model=MODEL,
         max_tokens=2000,
         system=system,
-        messages=[{"role": "user", "content": f"<diff>\n{diff}\n</diff>"}],
+        messages=[{"role": "user", "content":
+                   f"<diff>\n{diff}\n</diff>\n\n"
+                   f"<files_after_change>\n{context}</files_after_change>"}],
         output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
     )
 
@@ -357,6 +388,20 @@ def judge(diff: str) -> dict:
             continue
         kept.append(f)
     result["findings"] = kept[:3]
+
+    # Ask or score, enforced rather than requested. If the judge raised a
+    # question about a file and also filed a finding on the same file under the
+    # same principle, the finding is contingent on the answer it just said it
+    # did not have. Keep the question, drop the finding.
+    asked = {(q.get("file"), q.get("principle"))
+             for q in result.get("unresolved", [])}
+    if asked:
+        contingent = [f for f in result["findings"]
+                      if (f.get("file"), f.get("principle")) in asked]
+        for f in contingent:
+            dropped.append(("contingent on an open question", f.get("principle")))
+        result["findings"] = [f for f in result["findings"]
+                              if f not in contingent]
 
     praise = [
         c for c in result.get("commendations", [])
@@ -599,12 +644,13 @@ def post_check(repo: str, sha: str, result: dict):
 
 
 def main():
-    diff = get_diff()
+    diff, context = get_diff()
     if not diff.strip():
         result = {"verdict": "clear", "summary": "No reviewable files changed.",
-                  "findings": [], "commendations": [], "unresolved": []}
+                  "findings": [], "commendations": [], "unresolved": [],
+                  "covered": []}
     else:
-        result = judge(diff)
+        result = judge(diff, context)
 
     if os.environ.get("DRY_RUN"):
         print(json.dumps(result, indent=2))
