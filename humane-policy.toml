@@ -14,7 +14,8 @@
 
 [floor]
 # The floor is what a change cannot do, whatever else is true about it.
-# A finding on a floor principle raises the whole pull request to "discuss".
+# A violation (-1.0) on a floor principle raises the whole pull request to
+# "discuss". A -0.5 there, or anything off the floor, stays at "review".
 # Everything else is a ceiling: worth reviewing, never worth blocking over.
 #
 # Pick these deliberately. A short floor that people respect beats a long one

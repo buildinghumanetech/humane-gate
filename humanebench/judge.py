@@ -350,8 +350,12 @@ def judge(diff: str) -> dict:
     # The verdict is computed here, not taken from the model. Severity belongs to
     # the organization's floor, which is a fact about their policy file, not a
     # judgment call.
+    # A floor breach is a violation on a floor principle, not merely a mention of
+    # one. Without the severity test every bad diff lands on "discuss" and the
+    # three tiers collapse into two, which is the wall-of-red problem in orange.
     floor = floor_principles()
-    if any(f.get("principle") in floor for f in result["findings"]):
+    if any(f.get("principle") in floor and f.get("score") == "-1.0"
+           for f in result["findings"]):
         result["verdict"] = "discuss"
     elif result["findings"] or result["unresolved"]:
         result["verdict"] = "review"
