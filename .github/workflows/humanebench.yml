@@ -15,8 +15,8 @@ permissions:
   checks: write
 
 jobs:
-  shadow:
-    name: shadow
+  advisory:
+    name: advisory
     runs-on: ubuntu-latest
     steps:
       # The gate runs from the default branch, never from the pull request.
@@ -48,7 +48,7 @@ jobs:
 
       - run: pip install --quiet -r requirements.txt
 
-      - name: HumaneBench (shadow mode)
+      - name: HumaneBench (advisory)
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}

@@ -1,4 +1,4 @@
-# Humane Gate, shadow mode
+# Humane Gate
 
 A HumaneBench check that runs on every pull request, scores the diff against
 **HumaneBench rubric v3.0**, and **blocks nothing**.
@@ -9,13 +9,13 @@ and loaded as the first half of the judge's system prompt. The second half only
 explains how to apply a response rubric to a code diff. Every deviation is
 enumerated in [`RUBRIC_DELTAS.md`](RUBRIC_DELTAS.md).
 
-The point of shadow mode: a team can see what the gate would catch, on their real
-PRs, for thirty days, before deciding whether it should ever gate anything.
+Advisory, not a gate. A team can see what it would have caught, on their real
+pull requests, for thirty days, before deciding whether it should ever have teeth.
 
 ## What it does
 
 On each PR, the check posts one comment with any findings, and a `neutral` check
-run named `humanebench / shadow`. Re-running edits the same comment rather than
+run named `humanebench / advisory`. Re-running edits the same comment rather than
 stacking new ones.
 
 A finding has to survive three filters before anyone sees it:

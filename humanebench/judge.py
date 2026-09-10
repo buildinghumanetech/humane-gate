@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""HumaneBench PR check, shadow mode.
+"""HumaneBench PR check, advisory mode.
 
 Scores a pull request diff against the eight Building Humane Technology
 principles. Posts a comment and a neutral check run. Blocks nothing, ever.
@@ -26,6 +26,8 @@ import requests
 
 MODEL = os.environ.get("HUMANEBENCH_MODEL", "claude-sonnet-4-5")
 MAX_DIFF_CHARS = 60_000
+# Comment marker. Deliberately unchanged from the original "shadow" name so
+# that re-runs keep updating existing PR comments instead of posting new ones.
 MARKER = "<!-- humanebench-shadow -->"
 DOT = {"-1.0": "\U0001F534", "-0.5": "\U0001F7E1", "clean": "\U0001F535",
        "+1.0": "\U0001F7E2"}
@@ -404,7 +406,7 @@ def post_check(repo: str, sha: str, result: dict):
         "name": "humanebench / advisory",
         "head_sha": sha,
         "status": "completed",
-        "conclusion": "neutral",          # never failure. shadow mode.
+        "conclusion": "neutral",          # never failure. advisory, not a gate.
         "output": {
             "title": "No findings" if n == 0 else
                      f"{n} finding{'s' if n > 1 else ''} (advisory)",
