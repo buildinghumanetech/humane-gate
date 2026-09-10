@@ -181,6 +181,7 @@ python humanebench/judge.py
 | `.github/workflows/humanebench-doc.yml` | Reviews an issue labelled `humane-review`, or a document path. |
 | `app/` | A small companion app to have PRs against. |
 | `demo/` | Nine demo pull requests and a demo PRD. |
+| `tests/offline_document_mode.py` | The document path end to end against a canned judge response. No API key, no network, no spend. |
 
 ## Threat model
 

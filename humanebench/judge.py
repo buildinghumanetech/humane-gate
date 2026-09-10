@@ -396,13 +396,15 @@ def judge(diff: str, context: str = "", signed: dict = None,
     # and the same verification still stops the judge inventing evidence.
     lines = (changed_lines(diff) if mode == "diff"
              else [l.strip() for l in diff.splitlines() if l.strip()])
+    where = ("evidence not in diff" if mode == "diff"
+             else "evidence not in the document")
     kept, dropped = [], []
     for f in result.get("findings", []):
         if f.get("confidence") in DROP_CONFIDENCE:
             dropped.append(("low confidence", f.get("principle")))
             continue
         if not evidence_holds(f.get("evidence", ""), lines):
-            dropped.append(("evidence not in diff", f.get("principle")))
+            dropped.append((where, f.get("principle")))
             continue
         kept.append(f)
     result["findings"] = kept[:3]
@@ -443,7 +445,7 @@ def judge(diff: str, context: str = "", signed: dict = None,
     excused, breached = [], []
     for c in result.get("covered", []):
         if not evidence_holds(c.get("evidence", ""), lines):
-            dropped.append(("evidence not in diff", c.get("principle")))
+            dropped.append((where, c.get("principle")))
             continue
         (breached if c.get("principle") in floor else excused).append(c)
     result["covered"] = excused[:3]
@@ -783,7 +785,14 @@ def acceptances(repo: str, pr: str) -> dict:
 
 
 def sha_at(repo: str, pr: str, when: str) -> str:
-    """The head commit as of a moment in the conversation."""
+    """The head commit as of a moment in the conversation.
+
+    A document has no commits, so this returns empty for an issue and the
+    staleness check simply never fires. That is a real limitation, not a
+    silent one: an acceptance on a proposal is not pinned to a version the way
+    an acceptance on a diff is, so an edited proposal has to be re-run. Said
+    out loud in the README.
+    """
     if not when:
         return ""
     try:
@@ -867,10 +876,17 @@ def review_document():
     if not text.strip():
         raise SystemExit("humanebench: nothing to review")
     print(f"humanebench: reviewing {origin}, {len(text)} chars")
-    result = judge(text[:MAX_DIFF_CHARS], "", {}, mode="document")
+
+    # A person can accept a finding on a proposal exactly as they can on a
+    # diff: same command, same comment thread, same GitHub-backed identity.
+    num = os.environ.get("ISSUE_NUMBER")
+    signed = (acceptances(os.environ["REPO"], num)
+              if num and os.environ.get("GITHUB_TOKEN") else {})
+
+    result = judge(text[:MAX_DIFF_CHARS], "", signed, mode="document")
+    result["origin"] = origin
     body = render(result)
 
-    num = os.environ.get("ISSUE_NUMBER")
     if os.environ.get("DRY_RUN") or not num:
         print(json.dumps(result, indent=2))
         print("\n--- comment ---\n")

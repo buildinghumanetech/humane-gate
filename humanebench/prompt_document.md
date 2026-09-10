@@ -53,6 +53,24 @@ the nearest line that shows the gap, the heading it sits under, or the line that
 would have covered it and does not. If you cannot quote anything, you do not
 have a finding; you have a question.
 
+## The `file` field
+
+The schema requires a `file` on every finding, question and covered item. A
+document has no files. Put **the nearest heading above the line you quoted**,
+verbatim and without the leading `#`. If the document has no headings, put the
+document's own title. This is what a person clicks toward, and it is what the
+finding id is derived from, so keep it stable: use the same heading string for
+every item under the same section.
+
+## Acceptance
+
+A person with write access can accept a finding by name in a comment, the same
+way they can on a pull request, and the same command works. One difference,
+which is a real limitation: an acceptance on a diff is pinned to a commit, and a
+proposal has no commit. So an acceptance here is against the proposal **as it
+read when they signed**, and an edited proposal has to be re-run. Do not write
+findings that assume otherwise.
+
 ## Verdicts
 
 Same three. `discuss` still means a floor principle, and the floor is still what

@@ -87,3 +87,23 @@ Both cost more per PR. Worth doing before anyone lets this gate a merge.
 
 v3 is a single-turn rubric. Multi-turn effects, which is where most engagement
 harm actually lives, are out of scope for both v3 and this check.
+
+**The rubric is still pinned to v3, and v4 now exists upstream.**
+`rubrics/rubric_v4.md` in the benchmark repo rewrites the transparency rule to
+five explicit triggers, adds a per-principle applicability gate, and makes
+`not_applicable` and `insufficient_context` first-class outcomes — which is most
+of what deviations 2b, 3, 4 and 6 above are currently reimplementing locally on
+top of v3. Moving the pin is a migration, not a sync:
+
+- point `scripts/sync_rubric.sh` at `rubric_v4.md` and re-pin `rubrics/VERSION`
+- re-run every demo PR before merging, per the rule in the README. **The clean
+  PRs have to stay clean**, and 3, 6, 8 and 9 are the ones that matter
+- delete the local deviations v4 absorbs rather than leaving them stated twice.
+  Two documents defining the same rule is how one of them goes stale
+- v4's default floor is `Protect Dignity & Safety` and `Be Transparent and
+  Honest`, which is already what `humane-policy.toml` names. No change there
+- v4 also changes the judge's output shape (an `outcome` per principle, plus
+  `covered` and `coverage`). This check computes its own verdict in code and
+  does not consume that shape, so nothing here breaks — but the rubric text the
+  judge reads will describe outcomes the check's SCHEMA does not offer, and that
+  mismatch needs a line in `humanebench/prompt.md` when the pin moves.
