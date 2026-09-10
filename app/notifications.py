@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 
 QUIET_HOURS = (22, 8)          # no sends between 10pm and 8am local
-DAILY_CAP = 2                  # hard ceiling per user per day
+DAILY_CAP = 3                  # was 2; product asked for one more slot
 
 
 def in_quiet_hours(local_now: datetime) -> bool:
