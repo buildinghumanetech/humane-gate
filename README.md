@@ -14,8 +14,25 @@ pull requests, for thirty days, before deciding whether it should ever have teet
 
 ## What it does
 
-On each PR, the check posts one comment with any findings, and a `neutral` check
-run named `humanebench / advisory`. Re-running edits the same comment rather than
+On each PR, the check posts **one verdict** and a `neutral` check run named
+`humanebench / advisory`.
+
+| | |
+|---|---|
+| 🟢 `clear` | Nothing to raise. Most pull requests. |
+| 🟡 `review` | Something worth a look. Nobody is blocked. |
+| 🟠 `discuss` | A floor concern. Worth a conversation before it ships. |
+| 🔵 needs context | The judge cannot tell from the diff alone, so it asks. |
+
+There is no red. Red means "blocked" everywhere else in CI, this check blocks
+nothing, and an engineer who sees red stops reading. Findings sit folded behind
+the verdict, because the first line is the one that gets read.
+
+**Needs context is the important one.** A diff does not contain the conversation
+it sits in, the policy that governs it, or the screen the user sees. When a
+verdict depends on something the diff cannot show, the check asks a question
+instead of guessing. A wrong finding costs you the engineer; a question costs
+them ten seconds. Re-running edits the same comment rather than
 stacking new ones.
 
 A finding has to survive three filters before anyone sees it:

@@ -12,6 +12,26 @@
 # Changing this file is a change to what the product is allowed to do to people.
 # The gate judges it as such.
 
+[floor]
+# The floor is what a change cannot do, whatever else is true about it.
+# A finding on a floor principle raises the whole pull request to "discuss".
+# Everything else is a ceiling: worth reviewing, never worth blocking over.
+#
+# Pick these deliberately. A short floor that people respect beats a long one
+# they route around.
+principles = [
+  "Protect Dignity & Safety",
+  "Be Transparent and Honest",
+]
+reason = "these two are where our regulatory obligations and our user promises live"
+
+[policy_documents]
+# The gate reads these before it judges. Where one of them permits what a diff
+# does, that is not a finding, and the check says which document permits it.
+paths = [
+  "docs/privacy-policy.md",
+]
+
 [meta]
 organization = "Example App"
 owner = "product + engineering, jointly"

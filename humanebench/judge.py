@@ -29,8 +29,12 @@ MAX_DIFF_CHARS = 60_000
 # Comment marker. Deliberately unchanged from the original "shadow" name so
 # that re-runs keep updating existing PR comments instead of posting new ones.
 MARKER = "<!-- humanebench-shadow -->"
-DOT = {"-1.0": "\U0001F534", "-0.5": "\U0001F7E1", "clean": "\U0001F535",
-       "+1.0": "\U0001F7E2"}
+# Deliberately no red. Red means "blocked" everywhere else in CI, and this check
+# blocks nothing; an engineer who sees red reads it as a stop sign and stops
+# reading. Orange is the strongest thing here and it means "worth a conversation".
+DOT = {"clear": "\U0001F7E2", "review": "\U0001F7E1", "discuss": "\U0001F7E0",
+       "question": "\U0001F535", "+1.0": "\U0001F7E2"}
+VERDICT_WORD = {"clear": "Clear", "review": "Review", "discuss": "Discuss"}
 DROP_CONFIDENCE = {"low"}
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -38,6 +42,51 @@ ROOT = os.path.dirname(HERE)
 RUBRIC = os.path.join(ROOT, "rubrics", "rubric_v3.md")
 RUBRIC_VERSION = os.path.join(ROOT, "rubrics", "VERSION")
 POLICY = os.path.join(ROOT, "humane-policy.toml")
+
+
+def policy_documents() -> list:
+    """Company policy docs named in humane-policy.toml.
+
+    Parsed with a deliberately dumb reader rather than a TOML library: this needs
+    to work on whatever Python the runner happens to have, and the shape it reads
+    is three lines long.
+    """
+    if not os.path.exists(POLICY):
+        return []
+    paths, in_block = [], False
+    with open(POLICY) as f:
+        for line in f:
+            t = line.strip()
+            if t.startswith("["):
+                in_block = t == "[policy_documents]"
+                continue
+            if in_block and '"' in t and not t.startswith("#"):
+                paths += re.findall(r'"([^"]+)"', t)
+    out = []
+    for rel in paths:
+        full = os.path.join(ROOT, rel)
+        if os.path.exists(full):
+            with open(full) as f:
+                out.append((rel, f.read()))
+        else:
+            print(f"humanebench: policy document not found, skipping: {rel}")
+    return out
+
+
+def floor_principles() -> set:
+    """Principles the organization has declared non-negotiable."""
+    if not os.path.exists(POLICY):
+        return set()
+    names, in_block = [], False
+    with open(POLICY) as f:
+        for line in f:
+            t = line.strip()
+            if t.startswith("["):
+                in_block = t == "[floor]"
+                continue
+            if in_block and '"' in t and not t.startswith("#") and "reason" not in t:
+                names += re.findall(r'"([^"]+)"', t)
+    return set(names)
 
 
 def rubric_commit() -> str:
@@ -105,6 +154,14 @@ def build_system() -> str:
         adaptation = f.read()
 
     parts = [rubric, adaptation]
+
+    for path, body in policy_documents():
+        parts.append(
+            f"# Company policy document: `{path}`\n\n"
+            "This is a document the team wrote and committed. Where it permits\n"
+            "what a diff does, that is not a finding, and you say which document\n"
+            "permits it.\n\n" + body
+        )
     # Values as code. The rubric says what humane means; the policy file is where
     # this organization writes down its own numbers. Read as text, not parsed:
     # the judge needs to understand it, not evaluate it.
@@ -146,10 +203,24 @@ COMMEND_FIELDS = ["principle", "file", "evidence", "note"]
 SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["verdict", "summary", "findings", "commendations"],
+    "required": ["verdict", "summary", "findings", "commendations", "unresolved"],
     "properties": {
-        "verdict": {"type": "string", "enum": ["clean", "flags"]},
+        "verdict": {"type": "string", "enum": ["clear", "review", "discuss"]},
         "summary": {"type": "string"},
+        "unresolved": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["question", "why_it_matters", "file", "evidence"],
+                "properties": {
+                    "question": {"type": "string"},
+                    "why_it_matters": {"type": "string"},
+                    "file": {"type": "string"},
+                    "evidence": {"type": "string"},
+                },
+            },
+        },
         "commendations": {
             "type": "array",
             "items": {
@@ -246,9 +317,10 @@ def judge(diff: str) -> dict:
     try:
         result = json.loads(raw)
     except json.JSONDecodeError:
-        return {"verdict": "clean",
+        return {"verdict": "clear",
                 "summary": "Judge returned unparseable output.",
-                "findings": [], "error": raw[:500]}
+                "findings": [], "commendations": [], "unresolved": [],
+                "error": raw[:500]}
 
     # Three filters, all in code rather than model judgment. This is the whole
     # anti-noise story: the judge proposes, the runner disposes.
@@ -270,7 +342,21 @@ def judge(diff: str) -> dict:
     ][:2]
     result["commendations"] = praise
 
-    result["verdict"] = "flags" if result["findings"] else "clean"
+    result["unresolved"] = [
+        q for q in result.get("unresolved", [])
+        if evidence_holds(q.get("evidence", ""), lines)
+    ][:3]
+
+    # The verdict is computed here, not taken from the model. Severity belongs to
+    # the organization's floor, which is a fact about their policy file, not a
+    # judgment call.
+    floor = floor_principles()
+    if any(f.get("principle") in floor for f in result["findings"]):
+        result["verdict"] = "discuss"
+    elif result["findings"] or result["unresolved"]:
+        result["verdict"] = "review"
+    else:
+        result["verdict"] = "clear"
     for why, which in dropped:
         print(f"humanebench: dropped {which!r} ({why})")
     return result
@@ -290,34 +376,66 @@ def stamp() -> str:
 
 
 def render(result: dict) -> str:
-    findings = result["findings"]
+    """One verdict, then the detail folded away.
+
+    The shape is deliberate. An engineer opening a pull request reads the first
+    line and decides whether to read the second. A point-by-point score table
+    makes that decision for them, and the decision is no.
+    """
+    verdict = result.get("verdict", "clear")
+    findings = result.get("findings") or []
+    questions = result.get("unresolved") or []
+    praise = result.get("commendations") or []
+
     lines = [
         MARKER,
-        "### HumaneBench check &middot; `advisory`",
+        "### HumaneBench &middot; `advisory`",
+        "",
+        f"## {DOT.get(verdict, '')} {VERDICT_WORD.get(verdict, verdict)}",
+        "",
+        result.get("summary", ""),
         "",
     ]
-    if not findings:
+
+    if verdict == "discuss":
         lines += [
-            f"{DOT['clean']} **No findings.** Nothing in this diff changes what a "
-            "person can experience.",
-            "",
-            f"_{result.get('summary', '')}_",
+            "This touches something the team named as a floor in "
+            "`humane-policy.toml`. Worth a conversation before it ships. "
+            "It is not blocked and this check cannot block it.",
             "",
         ]
-    else:
+
+    if questions:
+        lines += [f"### {DOT['question']} Needs context", ""]
+        for q in questions:
+            lines += [
+                f"**{q['question']}**",
+                "",
+                f"{q['why_it_matters']} &nbsp;<sub>`{q['file']}`</sub>",
+                "",
+            ]
+
+    if praise:
+        for c in praise:
+            lines += [
+                f"{DOT['+1.0']} **Adds a protection.** {c['note']} "
+                f"<sub>`{c['file']}`</sub>",
+                "",
+            ]
+
+    if findings:
         n = len(findings)
+        named = ", ".join(dict.fromkeys(f["principle"] for f in findings))
         lines += [
-            (" ".join(DOT.get(str(f.get("score")), "") for f in findings)
-             + f" **{n} finding{'s' if n > 1 else ''}.** Advisory: this check does "
-               "not block and is not a required status."),
-            "",
-            f"_{result.get('summary', '')}_",
+            "<details>",
+            f"<summary><b>{n} finding{'s' if n > 1 else ''}</b> "
+            f"&nbsp;&middot;&nbsp; {named}</summary>",
             "",
         ]
         for f in findings:
             lines += [
-                f"#### {DOT.get(str(f['score']), '')} {f['principle']} "
-                f"&nbsp;`{f['score']}` &nbsp;<sub>confidence: {f['confidence']}</sub>",
+                f"#### {f['principle']} &nbsp;<sub>{f['score']} &middot; "
+                f"confidence {f['confidence']}</sub>",
                 "",
                 f"> v3 tier: _{f.get('tier', '')}_" if f.get("tier") else "",
                 "",
@@ -334,38 +452,27 @@ def render(result: dict) -> str:
                 f"**Smallest fix:** {f['suggestion']}",
                 "",
             ]
-    praise = result.get("commendations") or []
-    if praise:
-        lines += ["", "---", "", f"#### {DOT['+1.0']} Adds a protection", ""]
-        for c in praise:
-            lines += [
-                f"{DOT['+1.0']} **{c['principle']}** &nbsp;`+1.0` &nbsp; `{c['file']}`",
-                "",
-                "```diff",
-                f"+ {c['evidence']}",
-                "```",
-                "",
-                c["note"],
-                "",
-            ]
+        lines += ["</details>", ""]
 
     lines += [
         "---",
-        "<sub>Scored against "
+        "<sub>"
+        f"{DOT['clear']} clear &nbsp; {DOT['review']} review &nbsp; "
+        f"{DOT['discuss']} discuss &nbsp; {DOT['question']} needs context. "
+        "There is no red, because this check does not block anything. "
+        "Scored against "
         "<a href=\"https://github.com/buildinghumanetech/humanebench/blob/main/"
-        "rubrics/rubric_v3.md\">HumaneBench rubric v3.0</a>, loaded verbatim. "
-        "Findings report the -0.5 and -1.0 tiers; commendations report +1.0 "
-        "only. Low-confidence findings, and any whose quoted line is not in the "
-        "diff, are dropped before posting. "
-        "\U0001F534 -1.0 violation &nbsp; \U0001F7E1 -0.5 concerning &nbsp; "
-        "\U0001F535 nothing to report &nbsp; \U0001F7E2 +1.0 adds a protection. "
-        f"Thresholds come from this repo's <code>humane-policy.toml</code>. "
-        f"Deviations from v3 are in <code>RUBRIC_DELTAS.md</code>. "
+        "rubrics/rubric_v3.md\">HumaneBench rubric v3.0</a>, loaded verbatim, "
+        "plus this repo's <code>humane-policy.toml</code> and the policy "
+        "documents it names. Findings whose quoted line is not in the diff, or "
+        "that the judge marked low-confidence, are dropped before posting. "
+        "Deviations from v3 are in <code>RUBRIC_DELTAS.md</code>. "
         f"Rubric <code>{rubric_commit()}</code>, "
         f"commit <code>{os.environ.get('HEAD_SHA', 'local')[:7]}</code>.</sub>",
         "",
         f"<sub>Judged {stamp()}</sub>",
     ]
+
     out, prev_blank = [], False
     for ln in lines:
         if ln == "" and prev_blank:
@@ -401,15 +508,16 @@ def upsert_comment(repo: str, pr: str, body: str):
 
 
 def post_check(repo: str, sha: str, result: dict):
-    n = len(result["findings"])
     gh("POST", f"/repos/{repo}/check-runs", json={
         "name": "humanebench / advisory",
         "head_sha": sha,
         "status": "completed",
         "conclusion": "neutral",          # never failure. advisory, not a gate.
         "output": {
-            "title": "No findings" if n == 0 else
-                     f"{n} finding{'s' if n > 1 else ''} (advisory)",
+            "title": {"clear": "Clear",
+                      "review": "Review before merge (advisory)",
+                      "discuss": "Worth a conversation (advisory)"}.get(
+                          result.get("verdict", "clear"), "Advisory"),
             "summary": result.get("summary", ""),
         },
     })
@@ -418,8 +526,8 @@ def post_check(repo: str, sha: str, result: dict):
 def main():
     diff = get_diff()
     if not diff.strip():
-        result = {"verdict": "clean", "summary": "No reviewable files changed.",
-                  "findings": []}
+        result = {"verdict": "clear", "summary": "No reviewable files changed.",
+                  "findings": [], "commendations": [], "unresolved": []}
     else:
         result = judge(diff)
 
@@ -432,7 +540,9 @@ def main():
     repo, pr, sha = os.environ["REPO"], os.environ["PR_NUMBER"], os.environ["HEAD_SHA"]
     upsert_comment(repo, pr, render(result))
     post_check(repo, sha, result)
-    print(f"humanebench: {result['verdict']}, {len(result['findings'])} finding(s)")
+    print(f"humanebench: {result['verdict']}, "
+          f"{len(result['findings'])} finding(s), "
+          f"{len(result.get('unresolved', []))} question(s)")
 
 
 if __name__ == "__main__":
