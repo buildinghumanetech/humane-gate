@@ -165,7 +165,7 @@ def get_diff() -> tuple:
     return out[:MAX_DIFF_CHARS], "".join(bodies)
 
 
-def build_system() -> str:
+def build_system(mode: str = "diff") -> str:
     """HumaneBench rubric v3.0 verbatim, then the diff-adaptation layer.
 
     The rubric file is vendored unchanged from the benchmark repo so the two
@@ -181,6 +181,9 @@ def build_system() -> str:
         adaptation = f.read()
 
     parts = [rubric, adaptation]
+    if mode == "document":
+        with open(os.path.join(HERE, "prompt_document.md")) as f:
+            parts.append(f.read())
 
     for path, body in policy_documents():
         parts.append(
@@ -347,8 +350,9 @@ def evidence_holds(quote: str, lines: list) -> bool:
     return False
 
 
-def judge(diff: str, context: str = "", signed: dict = None) -> dict:
-    system = build_system()
+def judge(diff: str, context: str = "", signed: dict = None,
+          mode: str = "diff") -> dict:
+    system = build_system(mode)
 
     # An org-scoped key must name a workspace explicitly. A workspace-scoped key
     # does not. Setting ANTHROPIC_WORKSPACE_ID makes either kind work.
@@ -368,8 +372,10 @@ def judge(diff: str, context: str = "", signed: dict = None) -> dict:
         max_tokens=2000,
         system=system,
         messages=[{"role": "user", "content":
-                   f"<diff>\n{diff}\n</diff>\n\n"
-                   f"<files_after_change>\n{context}</files_after_change>"}],
+                   (f"<document>\n{diff}\n</document>" if mode == "document"
+                    else f"<diff>\n{diff}\n</diff>\n\n"
+                         f"<files_after_change>\n{context}"
+                         "</files_after_change>")}],
         output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
     )
 
@@ -385,7 +391,11 @@ def judge(diff: str, context: str = "", signed: dict = None) -> dict:
     # Three filters, all in code rather than model judgment. This is the whole
     # anti-noise story: the judge proposes, the runner disposes.
     result["acceptances"] = signed or {}
-    lines = changed_lines(diff)
+    result["mode"] = mode
+    # In document mode every line is quotable: there is no "changed" subset,
+    # and the same verification still stops the judge inventing evidence.
+    lines = (changed_lines(diff) if mode == "diff"
+             else [l.strip() for l in diff.splitlines() if l.strip()])
     kept, dropped = [], []
     for f in result.get("findings", []):
         if f.get("confidence") in DROP_CONFIDENCE:
@@ -519,7 +529,9 @@ def render(result: dict) -> str:
 
     lines = [
         MARKER,
-        "### HumaneBench &middot; `advisory`",
+        "### HumaneBench &middot; `advisory`"
+        + (" &middot; reviewing a proposal, not code"
+           if result.get("mode", "diff") == "document" else ""),
         "",
         f"## {DOT.get(verdict, '')} {VERDICT_WORD.get(verdict, verdict)}",
         "",
@@ -603,11 +615,14 @@ def render(result: dict) -> str:
                 "",
                 f"`{f['file']}`",
                 "",
-                "```diff",
-                f"+ {f['evidence']}",
+                "```diff" if result.get("mode", "diff") == "diff" else "```",
+                (f"+ {f['evidence']}" if result.get("mode", "diff") == "diff"
+                 else f["evidence"]),
                 "```",
                 "",
-                f"**Ships:** {f['behavior']}" if f.get("behavior") else "",
+                ((("**Ships:** " if result.get("mode", "diff") == "diff"
+                   else "**Would ship:** ") + f["behavior"])
+                 if f.get("behavior") else ""),
                 "",
                 f["rationale"],
                 "",
@@ -684,8 +699,10 @@ def render(result: dict) -> str:
         "<a href=\"https://github.com/buildinghumanetech/humanebench/blob/main/"
         "rubrics/rubric_v3.md\">HumaneBench rubric v3.0</a>, loaded verbatim, "
         "plus this repo's <code>humane-policy.toml</code> and the policy "
-        "documents it names. Findings whose quoted line is not in the diff, or "
-        "that the judge marked low-confidence, are dropped before posting. "
+        "documents it names. Findings whose quoted line is not in the "
+        + ("document" if result.get("mode", "diff") == "document" else "diff")
+        + ", or that the judge marked low-confidence, are dropped before "
+        "posting. "
         "Deviations from v3 are in <code>RUBRIC_DELTAS.md</code>. "
         f"Rubric <code>{rubric_commit()}</code>, "
         f"commit <code>{os.environ.get('HEAD_SHA', 'local')[:7]}</code>.</sub>",
@@ -823,7 +840,51 @@ def post_check(repo: str, sha: str, result: dict):
     })
 
 
+def get_document() -> tuple:
+    """The proposal to judge, and where to say what we thought of it.
+
+    Three ways in, because product people arrive by three different doors: an
+    issue body (a PRD pasted into GitHub), a file in the repo (a spec that lives
+    beside the code), or stdin (a Linear ticket, a Notion page, anything a person
+    can copy).
+    """
+    if os.environ.get("DOC_PATH"):
+        path = os.environ["DOC_PATH"]
+        if not os.path.exists(path):
+            raise SystemExit(f"humanebench: no such document: {path}")
+        with open(path) as f:
+            return f.read(), path
+    if os.environ.get("ISSUE_NUMBER"):
+        repo, num = os.environ["REPO"], os.environ["ISSUE_NUMBER"]
+        issue = gh("GET", f"/repos/{repo}/issues/{num}").json()
+        title, body = issue.get("title", ""), issue.get("body") or ""
+        return f"# {title}\n\n{body}", f"issue #{num}"
+    return sys.stdin.read(), "stdin"
+
+
+def review_document():
+    text, origin = get_document()
+    if not text.strip():
+        raise SystemExit("humanebench: nothing to review")
+    print(f"humanebench: reviewing {origin}, {len(text)} chars")
+    result = judge(text[:MAX_DIFF_CHARS], "", {}, mode="document")
+    body = render(result)
+
+    num = os.environ.get("ISSUE_NUMBER")
+    if os.environ.get("DRY_RUN") or not num:
+        print(json.dumps(result, indent=2))
+        print("\n--- comment ---\n")
+        print(body)
+        return
+    upsert_comment(os.environ["REPO"], num, body)
+    print(f"humanebench: {result['verdict']}, "
+          f"{len(result['findings'])} finding(s)")
+
+
 def main():
+    if os.environ.get("HUMANE_MODE") == "document" or "--document" in sys.argv:
+        return review_document()
+
     diff, context = get_diff()
     if not diff.strip():
         result = {"verdict": "clear", "summary": "No reviewable files changed.",

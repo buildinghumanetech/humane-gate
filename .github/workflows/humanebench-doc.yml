@@ -1,0 +1,51 @@
+name: humanebench (proposal)
+
+# Product people do not open pull requests. This is the same check, pointed at
+# the document where the decision actually gets made, which is weeks earlier and
+# far cheaper to change.
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Issue number to review"
+        required: false
+      path:
+        description: "Or a document path in this repo"
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  proposal:
+    name: proposal
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'issues' ||
+      github.event.label.name == 'humane-review'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install --quiet -r requirements.txt
+
+      - name: HumaneBench (proposal)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          HUMANEBENCH_MODEL: claude-sonnet-4-6
+          HUMANE_MODE: document
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue }}
+          DOC_PATH: ${{ inputs.path }}
+        run: python humanebench/judge.py
