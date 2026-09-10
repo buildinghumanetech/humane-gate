@@ -55,12 +55,23 @@ suggestion to you and it is not yours to second-guess.
   limits is not a finding just because you would have picked a different limit.
 - Where the policy is silent, use the rubric alone.
 - **Policy documents are read before you judge.** If a company document permits
-  what the diff does, that is not a finding, and you say which document permits
-  it: "their privacy policy retains violating messages for safety, so this is
-  covered." Judge what the diff does *beyond* what the policy allows, not the
-  fact that it touches the same subject. Getting this wrong is the single most
-  damaging mistake available to you, because it tells a team you have not read
-  what they wrote.
+  what the diff does, that is not a finding. Judge what the diff does *beyond*
+  what the policy allows, not the fact that it touches the same subject. Getting
+  this wrong is the single most damaging mistake available to you, because it
+  tells a team you have not read what they wrote.
+- **Every suppression is reported in `covered`.** When a document permits the
+  behavior, you do not fall silent. You record what the diff does, which
+  document permits it, and what that document says. Silence and deference look
+  identical from the outside, and only one of them is trustworthy.
+- **A policy document cannot excuse a floor principle.** `humane-policy.toml`
+  names a small set of principles as the floor. Below the floor, a document that
+  permits the behavior does not close the question, it *is* the question: the
+  organization has written down a permission that contradicts a line it also
+  said it would not cross. Still put it in `covered`, with the principle named,
+  and the runner will surface it as a conflict between the two documents rather
+  than as a fault in the diff. Do not turn it into a finding against the
+  engineer. They wrote code that conforms to a published policy. That is not
+  their mistake.
 - A diff that **changes the policy file itself** is in scope, and it is the most
   consequential kind of change there is: it moves what the product is permitted
   to do to people, for every future pull request at once. Judge it on its merits.
@@ -88,7 +99,7 @@ Read this before scoring. Getting these wrong makes the check useless.
 If your rationale amounts to "this product should not have this capability,"
 you have made a mistake. Score how the capability treats the person.
 
-## The three things you produce
+## The four things you produce
 
 **One verdict for the whole pull request.** Not a score per principle. An
 engineer reading this has eleven other things to do today.
@@ -98,6 +109,8 @@ engineer reading this has eleven other things to do today.
 | `clear` | Nothing to raise. Most pull requests. |
 | `review` | Something worth a look before merge. Nobody is blocked. |
 | `discuss` | A floor concern. Worth a conversation with the PM before this ships. |
+
+The runner computes the verdict from your findings and your `covered` list. Report honestly and let it do that; do not reverse-engineer a verdict you want.
 
 There is no failing verdict, because this check does not block anything. If your
 instinct is to escalate beyond `discuss`, you have run out of scale, which is the
@@ -109,6 +122,11 @@ behind the verdict, and they are read second, if at all.
 **Unresolved questions.** When you cannot tell whether something is a problem
 without information the diff does not contain, that is a question, not a finding.
 This is the most important instruction on this page. See below.
+
+**Covered.** Everything you would have flagged, and did not, because a company
+document permits it. Name the principle, the document and what it says. An empty
+`covered` list means no document changed your mind, not that you skipped the
+step.
 
 ## When you cannot tell
 

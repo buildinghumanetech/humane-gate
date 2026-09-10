@@ -203,7 +203,8 @@ COMMEND_FIELDS = ["principle", "file", "evidence", "note"]
 SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["verdict", "summary", "findings", "commendations", "unresolved"],
+    "required": ["verdict", "summary", "findings", "commendations",
+                 "unresolved", "covered"],
     "properties": {
         "verdict": {"type": "string", "enum": ["clear", "review", "discuss"]},
         "summary": {"type": "string"},
@@ -218,6 +219,27 @@ SCHEMA = {
                     "why_it_matters": {"type": "string"},
                     "file": {"type": "string"},
                     "evidence": {"type": "string"},
+                },
+            },
+        },
+        # Everything a policy document talked the judge out of. Making the
+        # suppression an output rather than a silence is the whole point: a
+        # company document can excuse a diff, and the runner still gets to see
+        # what was excused and decide whether the document had the standing.
+        "covered": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["principle", "file", "evidence", "document",
+                             "permits", "behavior"],
+                "properties": {
+                    "principle": {"type": "string", "enum": PRINCIPLES},
+                    "file": {"type": "string"},
+                    "evidence": {"type": "string"},
+                    "document": {"type": "string"},
+                    "permits": {"type": "string"},
+                    "behavior": {"type": "string"},
                 },
             },
         },
@@ -320,7 +342,7 @@ def judge(diff: str) -> dict:
         return {"verdict": "clear",
                 "summary": "Judge returned unparseable output.",
                 "findings": [], "commendations": [], "unresolved": [],
-                "error": raw[:500]}
+                "covered": [], "error": raw[:500]}
 
     # Three filters, all in code rather than model judgment. This is the whole
     # anti-noise story: the judge proposes, the runner disposes.
@@ -347,15 +369,32 @@ def judge(diff: str) -> dict:
         if evidence_holds(q.get("evidence", ""), lines)
     ][:3]
 
+    # A policy document can excuse anything except a floor principle.
+    #
+    # Without this, an organization with a permissive policy gets a quieter
+    # check, which makes this a conformance tool and not a humane one. The floor
+    # is the line their own documents cannot move. Below it, a document that
+    # permits the behavior does not end the argument; it becomes the argument,
+    # and the finding is against the document rather than the diff.
+    floor = floor_principles()
+    excused, breached = [], []
+    for c in result.get("covered", []):
+        if not evidence_holds(c.get("evidence", ""), lines):
+            dropped.append(("evidence not in diff", c.get("principle")))
+            continue
+        (breached if c.get("principle") in floor else excused).append(c)
+    result["covered"] = excused[:3]
+    result["floor_breached_by_policy"] = breached[:3]
+
     # The verdict is computed here, not taken from the model. Severity belongs to
     # the organization's floor, which is a fact about their policy file, not a
     # judgment call.
+    #
     # A floor breach is a violation on a floor principle, not merely a mention of
     # one. Without the severity test every bad diff lands on "discuss" and the
     # three tiers collapse into two, which is the wall-of-red problem in orange.
-    floor = floor_principles()
-    if any(f.get("principle") in floor and f.get("score") == "-1.0"
-           for f in result["findings"]):
+    if breached or any(f.get("principle") in floor and f.get("score") == "-1.0"
+                       for f in result["findings"]):
         result["verdict"] = "discuss"
     elif result["findings"] or result["unresolved"]:
         result["verdict"] = "review"
@@ -390,6 +429,8 @@ def render(result: dict) -> str:
     findings = result.get("findings") or []
     questions = result.get("unresolved") or []
     praise = result.get("commendations") or []
+    breached = result.get("floor_breached_by_policy") or []
+    excused = result.get("covered") or []
 
     lines = [
         MARKER,
@@ -408,6 +449,26 @@ def render(result: dict) -> str:
             "It is not blocked and this check cannot block it.",
             "",
         ]
+
+    # The floor a document cannot move. The diff is compliant; that is the
+    # problem, and the comment says so in those words rather than pretending
+    # the engineer did something wrong.
+    if breached:
+        for b in breached:
+            lines += [
+                f"### {DOT['discuss']} Permitted, and below the floor",
+                "",
+                f"**{b['behavior']}** This is allowed by "
+                f"`{b['document']}`, which says {b['permits']}",
+                "",
+                f"`{b['principle']}` is named as a floor in "
+                "`humane-policy.toml`, so a policy document does not settle it. "
+                "The diff is not the thing to change here. Either the document "
+                "or the floor is wrong, and that is a decision for a person.",
+                "",
+                f"<sub>`{b['file']}`</sub>",
+                "",
+            ]
 
     if questions:
         lines += [f"### {DOT['question']} Needs context", ""]
@@ -457,6 +518,16 @@ def render(result: dict) -> str:
                 "",
             ]
         lines += ["</details>", ""]
+
+    # Deference, shown rather than claimed. A team that sees the check name the
+    # document that stopped it believes the next thing it says.
+    if excused:
+        for c in excused:
+            lines += [
+                f"<sub>Not flagged: {c['behavior']} is permitted by "
+                f"`{c['document']}`.</sub>",
+                "",
+            ]
 
     lines += [
         "---",
