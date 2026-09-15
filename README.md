@@ -208,3 +208,12 @@ turn those on. Credit to the Sparkle implementation for the two-checkout design.
   checkout, or a GitHub App.
 - The check run is hardcoded to `conclusion: neutral`. Making it gate is a
   one-line change, and that line is the thirty-day decision.
+
+## Licence
+
+Apache License 2.0. See [`LICENSE`](LICENSE). Copyright 2026 Building Humane
+Technology.
+
+`rubrics/rubric_v3.md` is vendored from
+[buildinghumanetech/humanebench](https://github.com/buildinghumanetech/humanebench)
+and carries that repository's terms, not this one's.
