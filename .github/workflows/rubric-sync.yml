@@ -43,5 +43,5 @@ jobs:
           git push -u origin "$branch" --force
           gh pr create --base main --head "$branch" \
             --title "Sync HumaneBench rubric to ${sha:0:7}" \
-            --body "The rubric in buildinghumanetech/humanebench changed. Merging this changes what every future verdict means, so read the diff. Does anything in RUBRIC_DELTAS.md still hold? Re-run the three demo PRs before merging; the clean one must stay clean." \
+            --body "The rubric in buildinghumanetech/humanebench changed. Merging this changes what every future verdict means, so read the diff. Does anything in RUBRIC_DELTAS.md still hold? Re-run demo PRs 3, 6, 8 and 9 before merging; the clean one must stay clean." \
             || echo "PR already open for $branch"

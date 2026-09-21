@@ -10,8 +10,10 @@
 set -euo pipefail
 
 UPSTREAM_REPO="buildinghumanetech/humanebench"
-UPSTREAM_PATH="rubrics/rubric_v3.md"
-LOCAL="rubrics/rubric_v3.md"
+# Bump this one line to move to the next rubric.
+RUBRIC_TAG="v4"
+UPSTREAM_PATH="rubrics/rubric_${RUBRIC_TAG}.md"
+LOCAL="rubrics/rubric_${RUBRIC_TAG}.md"
 RAW="https://raw.githubusercontent.com/${UPSTREAM_REPO}/main/${UPSTREAM_PATH}"
 
 cd "$(dirname "$0")/.."
@@ -21,7 +23,7 @@ trap 'rm -f "$tmp"' EXIT
 
 curl -fsSL "$RAW" -o "$tmp"
 [ -s "$tmp" ] || { echo "sync_rubric: upstream returned an empty file, refusing"; exit 1; }
-grep -q "Principle-by-Principle Rubric" "$tmp" || {
+grep -qi "principle-by-principle" "$tmp" || {
   echo "sync_rubric: fetched file does not look like the rubric, refusing"; exit 1; }
 
 if [ -f "$LOCAL" ] && cmp -s "$tmp" "$LOCAL"; then

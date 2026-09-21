@@ -1,10 +1,10 @@
 # Humane Gate
 
 A HumaneBench check that runs on every pull request, scores the diff against
-**HumaneBench rubric v3.0**, and **blocks nothing**.
+**HumaneBench rubric v4**, and **blocks nothing**.
 
-The rubric is not reimplemented here. `rubrics/rubric_v3.md` is vendored byte-for-byte
-from [buildinghumanetech/humanebench](https://github.com/buildinghumanetech/humanebench/blob/main/rubrics/rubric_v3.md)
+The rubric is not reimplemented here. `rubrics/rubric_v4.md` is vendored byte-for-byte
+from [buildinghumanetech/humanebench](https://github.com/buildinghumanetech/humanebench/blob/main/rubrics/rubric_v4.md)
 and loaded as the first half of the judge's system prompt. The second half only
 explains how to apply a response rubric to a code diff. Every deviation is
 enumerated in [`RUBRIC_DELTAS.md`](RUBRIC_DELTAS.md).
@@ -40,7 +40,7 @@ A finding has to survive three filters before anyone sees it:
 - the diff has to change the range of experiences a person can have (refactors,
   tests and deps return clean)
 - the finding has to name the downstream consequence for a person, and cite the
-  v3 tier its rationale relies on
+  v4 tier its rationale relies on
 - the quoted evidence has to actually appear in the diff, checked in code
 - the judge has to quote the exact changed line as evidence
 - the judge has to mark the finding `medium` or `high` confidence
@@ -70,10 +70,10 @@ Drift is handled as a pull request instead:
 | `.github/workflows/rubric-sync.yml` | Mondays 14:00 UTC. Opens a PR when upstream moves. |
 
 Every PR comment footer carries the pinned short sha. Merging a rubric-sync PR
-changes what every future verdict means, so re-run the three demo PRs before
+changes what every future verdict means, so re-run demo PRs 3, 6, 8 and 9 before
 merging one. The clean PR has to stay clean.
 
-Seven demo pull requests, `./demo/open_pr.sh <n>`:
+Nine demo pull requests, `./demo/open_pr.sh <n>`:
 
 | n | Change | Layer | Expect |
 |---|---|---|---|
@@ -85,6 +85,7 @@ Seven demo pull requests, `./demo/open_pr.sh <n>`:
 | 7 | Daily cap 2 to 3 | one constant | honestly ambiguous |
 | 8 | Memory shipped with disclosure and controls | prompt + copy | clean, commended |
 | 9 | The policy file itself is loosened for Q4 | `humane-policy.toml` | flags |
+| 10 | 90-day holdout on wellbeing check-ins | backend, no UI | permitted, below the floor |
 
 ## Values as code
 
@@ -169,10 +170,10 @@ python humanebench/judge.py
 | Path | What |
 |---|---|
 | `humane-policy.toml` | This organization's own thresholds. Values as code. |
-| `rubrics/rubric_v3.md` | HumaneBench rubric v3.0, byte-identical to upstream. Never hand-edit. |
+| `rubrics/rubric_v4.md` | HumaneBench rubric v4, byte-identical to upstream. Never hand-edit. |
 | `rubrics/VERSION` | Which upstream commit is pinned, and its sha256. |
 | `scripts/sync_rubric.sh` | Pull a fresh rubric. Refuses an empty or unrecognizable file. |
-| `RUBRIC_DELTAS.md` | Every way the PR check differs from v3, and why. |
+| `RUBRIC_DELTAS.md` | Every way the PR check differs from v4, and why. |
 | `humanebench/prompt.md` | The adaptation layer: response rubric to code diff. Anti-noise rules live here. |
 | `humanebench/prompt_document.md` | The same, for a PRD or ticket instead of a diff. |
 | `humanebench/judge.py` | Read, call, filter, post. The verdict, the floor and the acceptances are computed here, not by the model. |
@@ -187,7 +188,7 @@ python humanebench/judge.py
 
 The gate runs from the default branch. The pull request is fetched as loose git
 objects, never checked out, never built, never executed; only its diff text is
-read. So a PR cannot edit `humanebench/prompt.md`, `rubrics/rubric_v3.md` or
+read. So a PR cannot edit `humanebench/prompt.md`, `rubrics/rubric_v4.md` or
 `judge.py` and then be scored by its own edits.
 
 **Not yet closed:** for same-repository pull requests, GitHub runs the workflow
@@ -214,6 +215,6 @@ turn those on. Credit to the Sparkle implementation for the two-checkout design.
 Apache License 2.0. See [`LICENSE`](LICENSE). Copyright 2026 Building Humane
 Technology.
 
-`rubrics/rubric_v3.md` is vendored from
+`rubrics/rubric_v4.md` is vendored from
 [buildinghumanetech/humanebench](https://github.com/buildinghumanetech/humanebench)
 and carries that repository's terms, not this one's.

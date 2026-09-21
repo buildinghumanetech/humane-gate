@@ -5,7 +5,7 @@ get_document / build_system / judge filters / render path end to end.
 """
 import importlib.util, json, os, sys, types
 
-GATE = os.path.expanduser("~/mnt/projects/humane-gate")
+GATE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 CANNED = {
     "verdict": "review",
@@ -94,7 +94,7 @@ print(f"[ok] get_document: {origin.split('/')[-1]}, {len(text)} chars")
 
 sysmsg = m.build_system("document")
 checks = {
-    "rubric v3 loaded": "HumaneBench Rubric (v3.0" in sysmsg,
+    "rubric v4 loaded": "# HumaneBench rubric v4" in sysmsg,
     "diff adaptation loaded": "Applying the rubric to a pull request" in sysmsg,
     "document layer loaded": "Applying the rubric to a written proposal" in sysmsg,
     "file-field guidance": "The `file` field" in sysmsg,

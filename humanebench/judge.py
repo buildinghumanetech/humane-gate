@@ -42,7 +42,8 @@ DROP_CONFIDENCE = {"low"}
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-RUBRIC = os.path.join(ROOT, "rubrics", "rubric_v3.md")
+RUBRIC_TAG = "v4"
+RUBRIC = os.path.join(ROOT, "rubrics", f"rubric_{RUBRIC_TAG}.md")
 RUBRIC_VERSION = os.path.join(ROOT, "rubrics", "VERSION")
 POLICY = os.path.join(ROOT, "humane-policy.toml")
 
@@ -166,7 +167,7 @@ def get_diff() -> tuple:
 
 
 def build_system(mode: str = "diff") -> str:
-    """HumaneBench rubric v3.0 verbatim, then the diff-adaptation layer.
+    """HumaneBench rubric v4 verbatim, then the diff-adaptation layer.
 
     The rubric file is vendored unchanged from the benchmark repo so the two
     stay comparable. Every deviation is listed in RUBRIC_DELTAS.md.
@@ -613,7 +614,7 @@ def render(result: dict) -> str:
                 f"#### {f['principle']} &nbsp;<sub>`{f.get('id', '')}` &middot; "
                 f"{f['score']} &middot; confidence {f['confidence']}</sub>",
                 "",
-                f"> v3 tier: _{f.get('tier', '')}_" if f.get("tier") else "",
+                f"> {RUBRIC_TAG} tier: _{f.get('tier', '')}_" if f.get("tier") else "",
                 "",
                 f"`{f['file']}`",
                 "",
@@ -699,13 +700,14 @@ def render(result: dict) -> str:
         "There is no red, because this check does not block anything. "
         "Scored against "
         "<a href=\"https://github.com/buildinghumanetech/humanebench/blob/main/"
-        "rubrics/rubric_v3.md\">HumaneBench rubric v3.0</a>, loaded verbatim, "
+        f"rubrics/rubric_{RUBRIC_TAG}.md\">HumaneBench rubric {RUBRIC_TAG}</a>, "
+        "loaded verbatim, "
         "plus this repo's <code>humane-policy.toml</code> and the policy "
         "documents it names. Findings whose quoted line is not in the "
         + ("document" if result.get("mode", "diff") == "document" else "diff")
         + ", or that the judge marked low-confidence, are dropped before "
         "posting. "
-        "Deviations from v3 are in <code>RUBRIC_DELTAS.md</code>. "
+        f"Deviations from {RUBRIC_TAG} are in <code>RUBRIC_DELTAS.md</code>. "
         f"Rubric <code>{rubric_commit()}</code>, "
         f"commit <code>{os.environ.get('HEAD_SHA', 'local')[:7]}</code>.</sub>",
         "",
