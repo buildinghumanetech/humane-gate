@@ -50,8 +50,9 @@ Anything else is dropped by the runner, not by the model.
 ## Setup
 
 1. New public repo, push this.
-2. **`./scripts/sync_rubric.sh`** — the checked-in rubric is a hand-transcription
-   until you run this once. It replaces it with the real bytes and pins the commit.
+2. **`./scripts/sync_rubric.sh --check`**: the checked-in rubric is already
+   byte-identical to upstream and pinned in `rubrics/VERSION`. This confirms it
+   has not drifted. Without `--check` it pulls the new bytes and re-pins.
 3. `gh secret set ANTHROPIC_API_KEY`
 4. `./demo/open_pr.sh 1` and so on, one at a time
 
