@@ -1,4 +1,7 @@
-# Humane Gate
+# Humane Gate (demo repo)
+
+> **This repo is a demo, not the thing to install.** It exists so you can read real example pull requests and their verdicts before adopting anything. To use Humane Gate on your own repositories, install [**humane-gate-action**](https://github.com/buildinghumanetech/humane-gate-action). It is one secret and one workflow file.
+
 
 A HumaneBench check that runs on every pull request, scores the diff against
 **HumaneBench rubric v4**, and **blocks nothing**.
@@ -47,9 +50,11 @@ A finding has to survive three filters before anyone sees it:
 
 Anything else is dropped by the runner, not by the model.
 
-## Setup
+## Run this demo yourself
 
-1. New public repo, push this.
+For maintainers and the curious. Adopters do not need any of this; use [humane-gate-action](https://github.com/buildinghumanetech/humane-gate-action).
+
+1. Create a new public repo and push this one to it.
 2. **`./scripts/sync_rubric.sh --check`**: the checked-in rubric is already
    byte-identical to upstream and pinned in `rubrics/VERSION`. This confirms it
    has not drifted. Without `--check` it pulls the new bytes and re-pins.
@@ -206,15 +211,17 @@ turn those on. Credit to the Sparkle implementation for the two-checkout design.
   what would actually fix it.
 - Set `HUMANEBENCH_MODEL` to whichever model you have access to.
 - Secrets are not available to `pull_request` runs from forks. Fine for a demo
-  repo you own; a real deployment uses `pull_request_target` with a pinned
-  checkout, or a GitHub App.
+  repo you own. Do not use `pull_request_target` to work around that: it runs
+  with secrets against fork code. Real deployments should use
+  [humane-gate-action](https://github.com/buildinghumanetech/humane-gate-action),
+  which does not support forks in v1 for exactly this reason.
 - The check run is hardcoded to `conclusion: neutral`. Making it gate is a
   one-line change, and that line is the thirty-day decision.
 
 ## Licence
 
 Apache License 2.0. See [`LICENSE`](LICENSE). Copyright 2026 Building Humane
-Technology.
+Tech.
 
 `rubrics/rubric_v4.md` is vendored from
 [buildinghumanetech/humanebench](https://github.com/buildinghumanetech/humanebench)
